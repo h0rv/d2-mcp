@@ -49,7 +49,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: release/${{ matrix.filename }}
           if-no-files-found: error
 
@@ -60,13 +60,12 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: binaries
           path: release
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release/*
+          files: release/**/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
