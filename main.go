@@ -1,97 +1,63 @@
 package main
 
 import (
-	"context"
-	"encoding/base64"
-	"errors"
 	"flag"
 	"log"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-
-	d2 "github.com/h0rv/d2-mcp/d2"
 )
+
+var GlobalImageType string
+
+var tools = []server.ServerTool{
+	{
+		Tool: mcp.NewTool("compile-d2",
+			mcp.WithDescription("Compile D2 code to validate and check for errors"),
+			mcp.WithString("code", mcp.Required(), mcp.Description("The D2 code to compile")),
+		),
+		Handler: CompileD2Handler,
+	},
+	{
+		Tool: mcp.NewTool("render-d2",
+			mcp.WithDescription("Render a D2 diagram into a SVG image"),
+			mcp.WithString("code", mcp.Required(), mcp.Description("The D2 code to render")),
+		),
+		Handler: RenderD2Handler,
+	},
+}
 
 func main() {
 
 	sseMode := flag.Bool("sse", false, "Enable SSE mode")
+	imageType := flag.String("image-type", "png", "The type of image to render (png, svg)")
 	flag.Parse()
+
+	if *imageType != "png" && *imageType != "svg" {
+		log.Fatalf("Invalid image type: %s", *imageType)
+	}
+
+	GlobalImageType = *imageType
 
 	s := server.NewMCPServer(
 		"d2-mcp",
 		"1.0.0",
+		server.WithLogging(),
 	)
 
-	registerD2Tools(s)
+	s.SetTools(tools...)
 
 	if *sseMode {
 		url := "http://localhost:8080"
 		sseServer := server.NewSSEServer(s, server.WithSSEEndpoint(url))
-		log.Println("Starting SSE server on " + url)
+		log.Println("Starting d2-msp service (mode: SSE) on " + url + "...")
 		if err := sseServer.Start(":8080"); err != nil {
 			log.Fatalf("Server error: %v\n", err)
 		}
 	} else {
-		log.Println("Starting stdio server...")
+		log.Println("Starting d2-mcp service (mode: stdio)...")
 		if err := server.ServeStdio(s); err != nil {
 			log.Fatalf("Server error: %v\n", err)
 		}
 	}
-}
-
-func registerD2Tools(s *server.MCPServer) {
-	renderTool := mcp.NewTool("render-d2",
-		mcp.WithDescription("Render a D2 diagram into a SVG"),
-		mcp.WithString("code",
-			mcp.Required(),
-			mcp.Description("The D2 script to render"),
-		),
-	)
-	s.AddTool(renderTool, renderD2Handler)
-
-	compileTool := mcp.NewTool("compile-d2",
-		mcp.WithDescription("Compile a D2 script into a D2 graph"),
-		mcp.WithString("code",
-			mcp.Required(),
-			mcp.Description("The D2 script to compile"),
-		),
-	)
-	s.AddTool(compileTool, compileD2Handler)
-}
-
-func renderD2Handler(
-	ctx context.Context,
-	request mcp.CallToolRequest,
-) (*mcp.CallToolResult, error) {
-	code, ok := request.Params.Arguments["code"].(string)
-	if !ok {
-		return nil, errors.New("code must be a string")
-	}
-
-	svg, err := d2.Render(ctx, code)
-	if err != nil {
-		return nil, err
-	}
-
-	svgEncoded := base64.StdEncoding.EncodeToString(svg)
-
-	return mcp.NewToolResultImage("d2 svg", svgEncoded, "image/svg+xml"), nil
-}
-
-func compileD2Handler(
-	ctx context.Context,
-	request mcp.CallToolRequest,
-) (*mcp.CallToolResult, error) {
-	code, ok := request.Params.Arguments["code"].(string)
-	if !ok {
-		return nil, errors.New("code must be a string")
-	}
-
-	_, _, err := d2.Compile(ctx, code)
-	if err != nil {
-		return nil, err
-	}
-
-	return mcp.NewToolResultText("D2 graph compiled successfully"), nil
 }

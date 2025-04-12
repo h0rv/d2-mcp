@@ -14,20 +14,22 @@ import (
 	"oss.terrastruct.com/util-go/go2"
 )
 
-func Compile(ctx context.Context, code string) (*d2target.Diagram, *d2graph.Graph, error) {
-	ruler, err := textmeasure.NewRuler()
-	if err != nil {
-		log.Printf("error creating ruler: %v", err)
-		return nil, nil, err
-	}
-
-	layoutResolver := func(engine string) (d2graph.LayoutGraph, error) {
-		return d2dagrelayout.DefaultLayout, nil
-	}
-
-	renderOpts := &d2svg.RenderOpts{
+var (
+	renderOpts = &d2svg.RenderOpts{
+		Sketch:  go2.Pointer(true),
 		Pad:     go2.Pointer(int64(5)),
 		ThemeID: &d2themescatalog.GrapeSoda.ID,
+	}
+	layoutResolver = func(engine string) (d2graph.LayoutGraph, error) {
+		return d2dagrelayout.DefaultLayout, nil
+	}
+)
+
+func Compile(ctx context.Context, code string) (diagram *d2target.Diagram, graph *d2graph.Graph, compileError error, otherError error) {
+	ruler, otherErr := textmeasure.NewRuler()
+	if otherErr != nil {
+		log.Printf("error creating ruler: %v", otherErr)
+		return nil, nil, otherErr, nil
 	}
 
 	compileOpts := &d2lib.CompileOptions{
@@ -35,25 +37,20 @@ func Compile(ctx context.Context, code string) (*d2target.Diagram, *d2graph.Grap
 		Ruler:          ruler,
 	}
 
-	diagram, graph, err := d2lib.Compile(ctx, code, compileOpts, renderOpts)
-	if err != nil {
-		log.Printf("error compiling d2: %v", err)
-		return nil, nil, err
-	}
-
-	return diagram, graph, nil
+	diagram, graph, compileErr := d2lib.Compile(ctx, code, compileOpts, renderOpts)
+	return diagram, graph, compileErr, otherErr
 }
 
 func Render(ctx context.Context, code string) ([]byte, error) {
-	diagram, _, err := Compile(ctx, code)
-	if err != nil {
-		log.Printf("error compiling d2: %v", err)
-		return nil, err
+	diagram, _, compileErr, otherErr := Compile(ctx, code)
+	if otherErr != nil {
+		log.Printf("error compiling d2: %v", otherErr)
+		return nil, otherErr
 	}
 
-	renderOpts := &d2svg.RenderOpts{
-		Pad:     go2.Pointer(int64(5)),
-		ThemeID: &d2themescatalog.GrapeSoda.ID,
+	if compileErr != nil {
+		log.Printf("error compiling d2: %v", compileErr)
+		return nil, compileErr
 	}
 
 	out, err := d2svg.Render(diagram, renderOpts)
