@@ -20,7 +20,7 @@ var tools = []server.ServerTool{
 	},
 	{
 		Tool: mcp.NewTool("render-d2",
-			mcp.WithDescription("Render a D2 diagram into a SVG image"),
+			mcp.WithDescription("Render a D2 diagram into an image"),
 			mcp.WithString("code", mcp.Required(), mcp.Description("The D2 code to render")),
 		),
 		Handler: RenderD2Handler,
