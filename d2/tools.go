@@ -17,7 +17,7 @@ import (
 func Compile(ctx context.Context, code string) (*d2target.Diagram, *d2graph.Graph, error) {
 	ruler, err := textmeasure.NewRuler()
 	if err != nil {
-		log.Println("error creating ruler: %v", err)
+		log.Printf("error creating ruler: %v", err)
 		return nil, nil, err
 	}
 
@@ -37,7 +37,7 @@ func Compile(ctx context.Context, code string) (*d2target.Diagram, *d2graph.Grap
 
 	diagram, graph, err := d2lib.Compile(ctx, code, compileOpts, renderOpts)
 	if err != nil {
-		log.Println("error compiling d2: %v", err)
+		log.Printf("error compiling d2: %v", err)
 		return nil, nil, err
 	}
 
@@ -47,7 +47,7 @@ func Compile(ctx context.Context, code string) (*d2target.Diagram, *d2graph.Grap
 func Render(ctx context.Context, code string) ([]byte, error) {
 	diagram, _, err := Compile(ctx, code)
 	if err != nil {
-		log.Println("error compiling d2: %v", err)
+		log.Printf("error compiling d2: %v", err)
 		return nil, err
 	}
 
@@ -58,7 +58,7 @@ func Render(ctx context.Context, code string) ([]byte, error) {
 
 	out, err := d2svg.Render(diagram, renderOpts)
 	if err != nil {
-		log.Println("error rendering d2: %v", err)
+		log.Printf("error rendering d2: %v", err)
 		return nil, err
 	}
 

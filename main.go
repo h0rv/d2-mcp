@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"log"
@@ -73,7 +74,9 @@ func renderD2Handler(
 		return nil, err
 	}
 
-	return mcp.NewToolResultText(string(svg)), nil
+	svgEncoded := base64.StdEncoding.EncodeToString(svg)
+
+	return mcp.NewToolResultImage("d2 svg", svgEncoded, "image/svg+xml"), nil
 }
 
 func compileD2Handler(
@@ -90,5 +93,5 @@ func compileD2Handler(
 		return nil, err
 	}
 
-	return mcp.NewToolResultText(""), nil
+	return mcp.NewToolResultText("D2 graph compiled successfully"), nil
 }
