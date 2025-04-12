@@ -1,14 +1,38 @@
 # d2-mcp
 
-## Running
+A Model Context Protocol (MCP) server for working with [D2: Declarative Diagramming](https://d2lang.com/), enabling seamless integration of diagram creation and validation into your development workflow.
 
-Compile
+**Tools:**
+
+* Compile D2 Code
+    * Validate D2 syntax and catch errors before rendering
+    * Get immediate feedback on diagram structure and syntax
+* Render Diagrams
+    * Generate diagrams for visual feedback and refinement
+    * Support for both vector (SVG) and raster (PNG) output formats
+
+## Install
+
+### Option 1: Install Binary Release
 
 ```bash
+```
+
+### Option 2: Install via `go`
+
+```bash
+go install github.com/h0rv/d2-mcp@latest
+```
+
+### Option 3: Build Locally
+
+```bash
+git clone https://github.com/h0rv/d2-mcp.git
+cd d2-mcp
 go build .
 ```
 
-## Configuring clients
+## Setup with MCP Client
 
 MacOS:
 
@@ -19,20 +43,22 @@ $EDITOR ~/Library/Application\ Support/Claude/claude_desktop_config.json
 $EDITOR ~/Library/Application\ Support/oterm/config.json
 ```
 
-Compile the server and add the following:
+Add the `d2` MCP server to your respective MCP Clients config:
 
 ```json
 {
     "mcpServers": {
         "d2": {
-            "command": "/YOUR/ABSOLUTE/PATH/d2-mcp/d2-mcp",
+            "command": "/YOUR/ABSOLUTE/PATH/d2-mcp",
             "args": ["--image-type", "png"]
         }
     }
 }
 ```
 
-## Debugging
+## Development
+
+### Debugging
 
 ```bash
 npx @modelcontextprotocol/inspector /YOUR/ABSOLUTE/PATH/d2-mcp/d2-mcp
