@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -30,6 +31,7 @@ var tools = []server.ServerTool{
 func main() {
 
 	sseMode := flag.Bool("sse", false, "Enable SSE mode")
+	port := flag.Int("port", 8080, "The port to run the server on")
 	imageType := flag.String("image-type", "png", "The type of image to render (png, svg)")
 	flag.Parse()
 
@@ -48,10 +50,10 @@ func main() {
 	s.SetTools(tools...)
 
 	if *sseMode {
-		url := "http://localhost:8080"
+		url := fmt.Sprintf("http://localhost:%d", *port)
 		sseServer := server.NewSSEServer(s, server.WithSSEEndpoint(url))
 		log.Println("Starting d2-msp service (mode: SSE) on " + url + "...")
-		if err := sseServer.Start(":8080"); err != nil {
+		if err := sseServer.Start(fmt.Sprintf(":%d", *port)); err != nil {
 			log.Fatalf("Server error: %v\n", err)
 		}
 	} else {

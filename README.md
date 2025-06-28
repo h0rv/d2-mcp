@@ -32,6 +32,13 @@ cd d2-mcp
 go build .
 ```
 
+### Option 4: Build Image Locally
+
+```bash
+docker build . -t d2-mcp
+docker run --rm -p 8080:8080 d2-mcp
+```
+
 ## Setup with MCP Client
 
 MacOS:
