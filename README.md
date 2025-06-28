@@ -39,6 +39,12 @@ docker build . -t d2-mcp
 docker run --rm -p 8080:8080 d2-mcp
 ```
 
+### Option 5: Run Container Image
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/h0rv/d2-mcp:1.0.1 # or latest release
+```
+
 ## Setup with MCP Client
 
 MacOS:
