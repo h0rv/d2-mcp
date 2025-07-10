@@ -8,10 +8,15 @@ import (
 )
 
 func SvgToPng(ctx context.Context, svg []byte) ([]byte, error) {
-	// Check if convert (ImageMagick) is available
-	_, err := exec.LookPath("convert")
-	if err != nil {
-		return nil, fmt.Errorf("ImageMagick's convert command not found: %w", err)
+	// Check which ImageMagick command is available
+	// ImageMagick v7 uses "magick", v6 uses "convert"
+	var magickCmd string
+	if _, err := exec.LookPath("magick"); err == nil {
+		magickCmd = "magick"
+	} else if _, err := exec.LookPath("convert"); err == nil {
+		magickCmd = "convert"
+	} else {
+		return nil, fmt.Errorf("ImageMagick not found: neither 'magick' nor 'convert' command available")
 	}
 
 	// Create temporary files
@@ -36,9 +41,12 @@ func SvgToPng(ctx context.Context, svg []byte) ([]byte, error) {
 	}
 
 	// Convert SVG to PNG using ImageMagick
-	cmd := exec.CommandContext(ctx, "convert", svgFile.Name(), pngFile.Name())
-	if err = cmd.Run(); err != nil {
-		return nil, fmt.Errorf("conversion failed: %w", err)
+	cmd := exec.CommandContext(ctx, magickCmd, svgFile.Name(), pngFile.Name())
+
+	// Capture both stdout and stderr for better error reporting
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("conversion failed: %w\nImageMagick output: %s", err, string(output))
 	}
 
 	// Read the PNG file
