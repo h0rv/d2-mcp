@@ -123,37 +123,10 @@ Add the `d2` MCP server to your respective MCP Clients config:
     "mcpServers": {
         "d2": {
             "command": "docker",
-            "args": ["run", "--rm", "-i", "-v", "./:/data", "d2-mcp", "--image-type", "png"]
+            "args": ["run", "--rm", "-i", "-v", "./:/data", "d2-mcp"]
         }
     }
 }
-```
-
-## Usage
-
-The MCP server supports two ways to provide D2 code:
-
-1. **Direct code parameter:** Pass D2 code directly as a string (good for simple diagrams)
-2. **File path parameter:** Pass a path to a D2 file (recommended for complex diagrams or to avoid JSON serialization issues)
-
-### Input/Output Behavior
-
-**By default (without `--write-files` flag):**
-- **compile-d2**: Validates D2 code/file and returns success/error message
-- **render-d2**: Renders the diagram and **returns base64 encoded image** for display
-
-**With `--write-files` flag enabled:**
-- **compile-d2**: Same as default behavior
-- **render-d2**: When using `file_path`, **writes output to a file** (e.g., `diagram.d2` → `diagram.png`)
-
-**Example usage:**
-```bash
-# Default behavior: always returns base64 image
-echo '{"code": "A -> B: hello"}' | d2-mcp render-d2
-echo '{"file_path": "diagram.d2"}' | d2-mcp render-d2
-
-# With --write-files flag: writes to file when using file_path
-echo '{"file_path": "diagram.d2"}' | d2-mcp --write-files render-d2
 ```
 
 ## Development
