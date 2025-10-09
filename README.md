@@ -12,6 +12,8 @@ A Model Context Protocol (MCP) server for working with [D2: Declarative Diagramm
     * Generate diagrams for visual feedback and refinement
     * Support PNG, SVG, and ASCII output formats
     * Accepts either direct code or file path to D2 file
+* Fetch D2 Cheat Sheet
+    * Returns a Markdown reference covering shapes, styling, and transport usage
 
 ## Install
 
@@ -185,6 +187,18 @@ Expose the streamable HTTP transport (default endpoint `/mcp`) for use with MCP 
 docker run --rm -p 8080:8080 ghcr.io/h0rv/d2-mcp:main --transport http --image-type svg
 ```
 
+### Cheat Sheet Tool
+
+Retrieve the built-in quick reference as Markdown:
+
+```json
+{
+  "tool": "fetch_d2_cheat_sheet"
+}
+```
+
+The cheat sheet highlights common shapes, layout tips, and ASCII-friendly patterns, making it ideal support material for downstream LLM prompts.
+
 ## Transports
 
 The server defaults to stdio transport for CLI-driven MCP clients. Switch transports per run:
@@ -198,6 +212,16 @@ Environment overrides:
 - `MCP_TRANSPORT` sets the transport (`stdio`, `sse`, `http`) when flags are not provided.
 - `PORT` (or the legacy `SSE_PORT`) sets the listening port for SSE/HTTP transports.
 - `SSE_MODE=true` retains backwards compatibility by selecting the SSE transport.
+
+## Tool Reference
+
+| Tool | Description | Key Arguments |
+| ---- | ----------- | ------------- |
+| `compile-d2` | Validates D2 source and surfaces syntax errors. | `code` (string) or `file_path` (string) |
+| `render-d2` | Renders diagrams to PNG, SVG, or ASCII (ASCII is LLM-friendly). | `code`/`file_path`, `format` (`png`, `svg`, `ascii`), `ascii_mode` (`extended`, `standard`) |
+| `fetch_d2_cheat_sheet` | Returns a Markdown cheat sheet with examples and best practices. | _None_ |
+
+Tip: Run `compile-d2` first to validate, then call `render-d2` with the same payload for the final output.
 
 ## Development
 

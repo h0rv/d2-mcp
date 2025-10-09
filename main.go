@@ -61,6 +61,12 @@ func buildServerTools(formats []string) []server.ServerTool {
 			Tool:    mcp.NewTool("render-d2", renderOptions...),
 			Handler: RenderD2Handler,
 		},
+		{
+			Tool: mcp.NewTool("fetch_d2_cheat_sheet",
+				mcp.WithDescription("Retrieve the bundled D2 quick-reference cheat sheet in Markdown."),
+			),
+			Handler: FetchD2CheatSheetHandler,
+		},
 	}
 }
 
@@ -185,6 +191,7 @@ func main() {
 		"d2-mcp",
 		"1.0.0",
 		server.WithLogging(),
+		server.WithInstructions(serverInstructions),
 	)
 
 	s.SetTools(buildServerTools(supportedFormats)...)

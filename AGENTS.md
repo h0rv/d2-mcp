@@ -7,6 +7,7 @@ The Go entry point lives in `main.go`, which wires CLI and SSE flags and registe
 - `go build .`: compile the stdio/SSE server against Go 1.24.2.
 - `go run . --sse --port 8080`: start the HTTP SSE service; add `--image-type svg` or `--image-type ascii` while iterating.
 - `go run . --transport http --port 8080`: start the streamable HTTP transport for MCP clients.
+- `go run . --transport stdio --image-type ascii`: default stdio transport tuned for LLM-friendly ASCII output.
 - `go test ./...`: execute all Go unit tests; add `-v` locally when stabilising flaky cases.
 - `docker build . -t d2-mcp`: produce the container image that matches production runners.
 - `npx @modelcontextprotocol/inspector ./d2-mcp`: inspect tool contracts during MCP client debugging.
@@ -21,4 +22,4 @@ Prefer table-driven tests in `*_test.go` files co-located with the code under te
 Adopt the existing Git history style: short, imperative subject lines in ASCII (e.g., `fix docker setup`). Each PR should describe the behavioural impact, link any relevant issues, and call out CLI or protocol changes for MCP clients. Include before/after screenshots when altering rendered output, and document new flags or environment variables in `README.md`. Run `go test ./...` and note the result in the PR body before requesting review.
 
 ## Environment & Tooling Notes
-Rendering PNG output depends on ImageMagick (`magick` or `convert`) being available on `$PATH`; ensure CI images install it when enabling PNG tests. ASCII rendering defaults to Unicode box drawing—set `--ascii-mode standard` when targets can't display those glyphs. `MCP_TRANSPORT`/`PORT` env vars let you switch transports in containerized runners. Keep Go toolchains aligned with the `go 1.24.2` directive, updating `go.mod` and `Dockerfile` together when bumping versions.
+Rendering PNG output depends on ImageMagick (`magick` or `convert`) being available on `$PATH`; ensure CI images install it when enabling PNG tests. ASCII rendering defaults to Unicode box drawing—set `--ascii-mode standard` when targets can't display those glyphs. `MCP_TRANSPORT`/`PORT` env vars let you switch transports in containerized runners. Keep Go toolchains aligned with the `go 1.24.2` directive, updating `go.mod` and `Dockerfile` together when bumping versions. The bundled `d2/CHEATSHEET.md` powers the `fetch_d2_cheat_sheet` tool—update it alongside feature changes so downstream LLMs receive accurate guidance.

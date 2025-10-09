@@ -194,3 +194,14 @@ func RenderD2Handler(
 	imageEncoded := base64.StdEncoding.EncodeToString(img)
 	return mcp.NewToolResultImage("D2 diagram", imageEncoded, imgType), nil
 }
+
+func FetchD2CheatSheetHandler(
+	ctx context.Context,
+	request mcp.CallToolRequest,
+) (*mcp.CallToolResult, error) {
+	cheatSheet, err := loadCheatSheet()
+	if err != nil {
+		return nil, err
+	}
+	return mcp.NewToolResultText(cheatSheet), nil
+}
