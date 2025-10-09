@@ -179,6 +179,26 @@ Expose the SSE server on port 8080 while emitting SVG:
 docker run --rm -e SSE_MODE=true -p 8080:8080 ghcr.io/h0rv/d2-mcp:main --image-type svg
 ```
 
+Expose the streamable HTTP transport (default endpoint `/mcp`) for use with MCP clients that expect the new protocol:
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/h0rv/d2-mcp:main --transport http --image-type svg
+```
+
+## Transports
+
+The server defaults to stdio transport for CLI-driven MCP clients. Switch transports per run:
+
+- `--transport stdio`: default for local CLI integrations.
+- `--transport sse`: legacy Server-Sent Events transport (alias: `--sse`).
+- `--transport http`: streamable HTTP transport; combine with `-p`/`--port` when running in Docker or containers.
+
+Environment overrides:
+
+- `MCP_TRANSPORT` sets the transport (`stdio`, `sse`, `http`) when flags are not provided.
+- `PORT` (or the legacy `SSE_PORT`) sets the listening port for SSE/HTTP transports.
+- `SSE_MODE=true` retains backwards compatibility by selecting the SSE transport.
+
 ## Development
 
 ### Debugging

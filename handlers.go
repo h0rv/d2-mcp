@@ -14,15 +14,29 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// getArguments safely returns request arguments as a map, decoding JSON when needed.
+func getArguments(request mcp.CallToolRequest) map[string]any {
+	if args := request.GetArguments(); args != nil {
+		return args
+	}
+
+	var decoded map[string]any
+	if err := request.BindArguments(&decoded); err == nil && decoded != nil {
+		return decoded
+	}
+
+	return map[string]any{}
+}
+
 // getCodeFromRequest extracts D2 code from either the "code" parameter or by reading from "file_path"
-func getCodeFromRequest(request mcp.CallToolRequest) (string, error) {
+func getCodeFromArgs(args map[string]any) (string, error) {
 	// Check if code is provided directly
-	if code, ok := request.Params.Arguments["code"].(string); ok && code != "" {
+	if code, ok := args["code"].(string); ok && code != "" {
 		return code, nil
 	}
 
 	// Check if file_path is provided
-	if filePath, ok := request.Params.Arguments["file_path"].(string); ok && filePath != "" {
+	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return "", errors.New("failed to read file: " + err.Error())
@@ -63,7 +77,8 @@ func CompileD2Handler(
 	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
-	code, err := getCodeFromRequest(request)
+	args := getArguments(request)
+	code, err := getCodeFromArgs(args)
 	if err != nil {
 		return nil, err
 	}
@@ -84,13 +99,14 @@ func RenderD2Handler(
 	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
-	code, err := getCodeFromRequest(request)
+	args := getArguments(request)
+	code, err := getCodeFromArgs(args)
 	if err != nil {
 		return nil, err
 	}
 
 	format := GlobalRenderFormat
-	if formatArg, ok := request.Params.Arguments["format"].(string); ok && formatArg != "" {
+	if formatArg, ok := args["format"].(string); ok && formatArg != "" {
 		format = strings.ToLower(formatArg)
 	}
 
@@ -116,7 +132,7 @@ func RenderD2Handler(
 			return nil, err
 		}
 
-		if modeArg, ok := request.Params.Arguments["ascii_mode"].(string); ok && modeArg != "" {
+		if modeArg, ok := args["ascii_mode"].(string); ok && modeArg != "" {
 			asciiMode, err = normalize(modeArg)
 			if err != nil {
 				return nil, err
@@ -129,10 +145,9 @@ func RenderD2Handler(
 		}
 
 		if GlobalWriteFiles {
-			if filePath, ok := request.Params.Arguments["file_path"].(string); ok && filePath != "" {
+			if filePath, ok := args["file_path"].(string); ok && filePath != "" {
 				outputPath := generateOutputFilename(filePath, format)
-				err := os.WriteFile(outputPath, ascii, 0644)
-				if err != nil {
+				if err := os.WriteFile(outputPath, ascii, 0644); err != nil {
 					return nil, errors.New("failed to write output file: " + err.Error())
 				}
 				return mcp.NewToolResultText("D2 diagram rendered to: " + outputPath), nil
@@ -166,10 +181,9 @@ func RenderD2Handler(
 
 	// Write to file if --write-files flag is enabled AND file_path was provided
 	if GlobalWriteFiles {
-		if filePath, ok := request.Params.Arguments["file_path"].(string); ok && filePath != "" {
+		if filePath, ok := args["file_path"].(string); ok && filePath != "" {
 			outputPath := generateOutputFilename(filePath, format)
-			err := os.WriteFile(outputPath, img, 0644)
-			if err != nil {
+			if err := os.WriteFile(outputPath, img, 0644); err != nil {
 				return nil, errors.New("failed to write output file: " + err.Error())
 			}
 			return mcp.NewToolResultText("D2 diagram rendered to: " + outputPath), nil

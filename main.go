@@ -19,10 +19,19 @@ var GlobalASCIIMode string
 var supportedFormats []string
 var supportedFormatSet map[string]struct{}
 
+func containsFormat(formats []string, target string) bool {
+	for _, f := range formats {
+		if f == target {
+			return true
+		}
+	}
+	return false
+}
+
 func buildServerTools(formats []string) []server.ServerTool {
 	formatList := strings.Join(formats, ", ")
 
-	formatOptions := []mcp.ToolOption{
+	renderOptions := []mcp.ToolOption{
 		mcp.WithDescription(fmt.Sprintf("Render a D2 diagram in %s format", formatList)),
 		mcp.WithString("code", mcp.Description("The D2 code to render (either this or file_path is required)")),
 		mcp.WithString("file_path", mcp.Description("Path to a D2 file to render (either this or code is required)")),
@@ -30,10 +39,13 @@ func buildServerTools(formats []string) []server.ServerTool {
 			mcp.Description(fmt.Sprintf("Optional output format override (%s)", formatList)),
 			mcp.Enum(formats...),
 		),
-		mcp.WithString("ascii_mode",
+	}
+
+	if containsFormat(formats, "ascii") {
+		renderOptions = append(renderOptions, mcp.WithString("ascii_mode",
 			mcp.Description("ASCII rendering mode when format=ascii (extended, standard)"),
 			mcp.Enum("extended", "standard"),
-		),
+		))
 	}
 
 	return []server.ServerTool{
@@ -46,13 +58,13 @@ func buildServerTools(formats []string) []server.ServerTool {
 			Handler: CompileD2Handler,
 		},
 		{
-			Tool:    mcp.NewTool("render-d2", formatOptions...),
+			Tool:    mcp.NewTool("render-d2", renderOptions...),
 			Handler: RenderD2Handler,
 		},
 	}
 }
 
-func detectPNGSUpport() bool {
+func detectPNGSupport() bool {
 	if _, err := exec.LookPath("magick"); err == nil {
 		return true
 	}
@@ -64,7 +76,10 @@ func detectPNGSUpport() bool {
 
 func main() {
 
-	sseMode := flag.Bool("sse", false, "Enable SSE mode")
+	var transport string
+	flag.StringVar(&transport, "t", "stdio", "Transport type (stdio, sse, http)")
+	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, sse, http)")
+	sseFlag := flag.Bool("sse", false, "Enable SSE transport (deprecated, use --transport=sse)")
 	port := flag.Int("port", 8080, "The port to run the server on")
 	imageType := flag.String("image-type", "png", "The output format to render (png, svg, ascii)")
 	writeFiles := flag.Bool("write-files", false, "Write output files to disk when using file_path (default: return base64)")
@@ -72,32 +87,54 @@ func main() {
 	flag.Parse()
 
 	var (
-		sseFlagSet  bool
-		portFlagSet bool
+		transportFlagSet bool
+		portFlagSet      bool
 	)
 	flag.CommandLine.Visit(func(f *flag.Flag) {
 		switch f.Name {
-		case "sse":
-			sseFlagSet = true
+		case "t", "transport":
+			transportFlagSet = true
 		case "port":
 			portFlagSet = true
 		}
 	})
 
-	if !sseFlagSet {
+	if *sseFlag {
+		log.Println("Warning: --sse is deprecated, use --transport=sse instead.")
+		transport = "sse"
+	}
+
+	if !transportFlagSet && !*sseFlag {
+		if env := os.Getenv("MCP_TRANSPORT"); env != "" {
+			transport = env
+		}
+	}
+
+	if !transportFlagSet && !*sseFlag {
 		if env := os.Getenv("SSE_MODE"); strings.EqualFold(env, "true") {
-			*sseMode = true
+			transport = "sse"
 		}
 	}
 
 	if !portFlagSet {
-		if env := os.Getenv("SSE_PORT"); env != "" {
+		if env := os.Getenv("PORT"); env != "" {
+			p, err := strconv.Atoi(env)
+			if err != nil {
+				log.Fatalf("Invalid PORT value: %s", env)
+			}
+			*port = p
+		} else if env := os.Getenv("SSE_PORT"); env != "" {
 			p, err := strconv.Atoi(env)
 			if err != nil {
 				log.Fatalf("Invalid SSE_PORT value: %s", env)
 			}
 			*port = p
 		}
+	}
+
+	transport = strings.ToLower(strings.TrimSpace(transport))
+	if transport == "" {
+		transport = "stdio"
 	}
 
 	format := strings.ToLower(*imageType)
@@ -115,12 +152,13 @@ func main() {
 	GlobalASCIIMode = mode
 
 	// Determine supported formats based on environment/tool availability.
-	pngSupported := detectPNGSUpport()
+	pngSupported := detectPNGSupport()
 	if !pngSupported {
 		log.Println("Warning: PNG rendering disabled; install ImageMagick ('magick' or 'convert') to enable it.")
 	}
 
 	allFormats := []string{"png", "svg", "ascii"}
+	supportedFormats = make([]string, 0, len(allFormats))
 	for _, f := range allFormats {
 		if f == "png" && !pngSupported {
 			continue
@@ -151,17 +189,27 @@ func main() {
 
 	s.SetTools(buildServerTools(supportedFormats)...)
 
-	if *sseMode {
-		url := fmt.Sprintf("http://localhost:%d", *port)
-		sseServer := server.NewSSEServer(s, server.WithSSEEndpoint(url))
-		log.Println("Starting d2-mcp service (mode: SSE) on " + url + "...")
-		if err := sseServer.Start(fmt.Sprintf(":%d", *port)); err != nil {
-			log.Fatalf("Server error: %v\n", err)
-		}
-	} else {
-		log.Println("Starting d2-mcp service (mode: stdio)...")
+	switch transport {
+	case "stdio":
+		log.Println("Starting d2-mcp service (transport: stdio)...")
 		if err := server.ServeStdio(s); err != nil {
 			log.Fatalf("Server error: %v\n", err)
 		}
+	case "sse":
+		url := fmt.Sprintf("http://localhost:%d", *port)
+		sseServer := server.NewSSEServer(s, server.WithSSEEndpoint(url))
+		log.Println("Starting d2-mcp service (transport: sse) on " + url + "...")
+		if err := sseServer.Start(fmt.Sprintf(":%d", *port)); err != nil {
+			log.Fatalf("Server error: %v\n", err)
+		}
+	case "http":
+		addr := fmt.Sprintf(":%d", *port)
+		httpServer := server.NewStreamableHTTPServer(s)
+		log.Println("Starting d2-mcp service (transport: http) on http://localhost" + addr + "/mcp ...")
+		if err := httpServer.Start(addr); err != nil {
+			log.Fatalf("Server error: %v\n", err)
+		}
+	default:
+		log.Fatalf("Invalid transport type: %s. Must be 'stdio', 'sse', or 'http'", transport)
 	}
 }
