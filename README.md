@@ -10,7 +10,7 @@ A Model Context Protocol (MCP) server for working with [D2: Declarative Diagramm
     * Accepts either direct code or file path to D2 file
 * Render Diagrams
     * Generate diagrams for visual feedback and refinement
-    * Support for both vector (SVG) and raster (PNG) output formats
+    * Support PNG, SVG, and ASCII output formats
     * Accepts either direct code or file path to D2 file
 
 ## Install
@@ -111,7 +111,7 @@ Add the `d2` MCP server to your respective MCP Clients config:
     "mcpServers": {
         "d2": {
             "command": "docker",
-            "args": ["run", "--rm", "-i", "ghcr.io/h0rv/d2-mcp:main"]
+            "args": ["run", "--rm", "-i", "ghcr.io/h0rv/d2-mcp:main", "--image-type", "svg"]
         }
     }
 }
@@ -123,10 +123,60 @@ Add the `d2` MCP server to your respective MCP Clients config:
     "mcpServers": {
         "d2": {
             "command": "docker",
-            "args": ["run", "--rm", "-i", "-v", "./:/data", "ghcr.io/h0rv/d2-mcp:main"]
+            "args": [
+                "run", "--rm", "-i",
+                "-v", "./:/data",
+                "ghcr.io/h0rv/d2-mcp:main",
+                "--image-type", "ascii",
+                "--ascii-mode", "standard",
+                "--write-files"
+            ]
         }
     }
 }
+```
+
+## Rendering Formats
+
+The server returns PNG output by default. Override globally when starting the binary:
+
+```bash
+./d2-mcp --image-type svg        # SVG output
+./d2-mcp --image-type ascii      # ASCII output with Unicode box drawing characters
+./d2-mcp --image-type ascii --ascii-mode standard  # ASCII output restricted to basic ASCII chars
+```
+
+Inside MCP tool calls, pass the optional `format` argument (`png`, `svg`, `ascii`) and, when `ascii`, the `ascii_mode` argument (`extended`, `standard`) to switch formats per request.
+
+### Docker Usage Examples
+
+Run the container with default PNG output over stdio:
+
+```bash
+docker run --rm -i ghcr.io/h0rv/d2-mcp:main
+```
+
+Switch to Unicode ASCII diagrams and capture responses as plain text:
+
+```bash
+docker run --rm -i ghcr.io/h0rv/d2-mcp:main --image-type ascii
+```
+
+Use basic ASCII characters and write rendered files back into your working tree (requires a bind mount):
+
+```bash
+docker run --rm -i \
+  -v "$(pwd)":/data \
+  ghcr.io/h0rv/d2-mcp:main \
+  --image-type ascii \
+  --ascii-mode standard \
+  --write-files
+```
+
+Expose the SSE server on port 8080 while emitting SVG:
+
+```bash
+docker run --rm -e SSE_MODE=true -p 8080:8080 ghcr.io/h0rv/d2-mcp:main --image-type svg
 ```
 
 ## Development

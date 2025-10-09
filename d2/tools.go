@@ -3,10 +3,13 @@ package d2
 import (
 	"context"
 	"log"
+	"strings"
 
 	"oss.terrastruct.com/d2/d2graph"
 	"oss.terrastruct.com/d2/d2layouts/d2dagrelayout"
 	"oss.terrastruct.com/d2/d2lib"
+	"oss.terrastruct.com/d2/d2renderers/d2ascii"
+	"oss.terrastruct.com/d2/d2renderers/d2ascii/charset"
 	"oss.terrastruct.com/d2/d2renderers/d2svg"
 	"oss.terrastruct.com/d2/d2target"
 	"oss.terrastruct.com/d2/d2themes/d2themescatalog"
@@ -56,6 +59,37 @@ func Render(ctx context.Context, code string) ([]byte, error) {
 	out, err := d2svg.Render(diagram, renderOpts)
 	if err != nil {
 		log.Printf("error rendering d2: %v", err)
+		return nil, err
+	}
+
+	return out, nil
+}
+
+func RenderASCII(ctx context.Context, code string, mode string) ([]byte, error) {
+	diagram, _, compileErr, otherErr := Compile(ctx, code)
+	if otherErr != nil {
+		log.Printf("error compiling d2: %v", otherErr)
+		return nil, otherErr
+	}
+
+	if compileErr != nil {
+		log.Printf("error compiling d2: %v", compileErr)
+		return nil, compileErr
+	}
+
+	artist := d2ascii.NewASCIIartist()
+	opts := &d2ascii.RenderOpts{}
+
+	switch strings.ToLower(mode) {
+	case "standard", "ascii":
+		opts.Charset = charset.ASCII
+	default:
+		opts.Charset = charset.Unicode
+	}
+
+	out, err := artist.Render(ctx, diagram, opts)
+	if err != nil {
+		log.Printf("error rendering d2 ascii: %v", err)
 		return nil, err
 	}
 

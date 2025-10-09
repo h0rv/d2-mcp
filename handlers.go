@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,8 +33,8 @@ func getCodeFromRequest(request mcp.CallToolRequest) (string, error) {
 	return "", errors.New("either 'code' or 'file_path' parameter must be provided")
 }
 
-// generateOutputFilename creates an output filename based on input filename and image type
-func generateOutputFilename(inputPath, imageType string) string {
+// generateOutputFilename creates an output filename based on input filename and requested format
+func generateOutputFilename(inputPath, format string) string {
 	dir := filepath.Dir(inputPath)
 	base := filepath.Base(inputPath)
 
@@ -44,10 +45,15 @@ func generateOutputFilename(inputPath, imageType string) string {
 
 	// Add appropriate extension
 	var ext string
-	if imageType == "png" {
+	switch format {
+	case "png":
 		ext = ".png"
-	} else {
+	case "svg":
 		ext = ".svg"
+	case "ascii":
+		ext = ".txt"
+	default:
+		ext = "." + format
 	}
 
 	return filepath.Join(dir, base+ext)
@@ -83,6 +89,59 @@ func RenderD2Handler(
 		return nil, err
 	}
 
+	format := GlobalRenderFormat
+	if formatArg, ok := request.Params.Arguments["format"].(string); ok && formatArg != "" {
+		format = strings.ToLower(formatArg)
+	}
+
+	if _, ok := supportedFormatSet[format]; !ok {
+		return nil, fmt.Errorf("unsupported format: %s (supported: %s)", format, strings.Join(supportedFormats, ", "))
+	}
+
+	if format == "ascii" {
+		normalize := func(mode string) (string, error) {
+			mode = strings.TrimSpace(strings.ToLower(mode))
+			switch mode {
+			case "", "extended", "unicode":
+				return "extended", nil
+			case "standard", "ascii":
+				return "standard", nil
+			default:
+				return "", errors.New("invalid ASCII mode: " + mode)
+			}
+		}
+
+		asciiMode, err := normalize(GlobalASCIIMode)
+		if err != nil {
+			return nil, err
+		}
+
+		if modeArg, ok := request.Params.Arguments["ascii_mode"].(string); ok && modeArg != "" {
+			asciiMode, err = normalize(modeArg)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		ascii, err := d2.RenderASCII(ctx, code, asciiMode)
+		if err != nil {
+			return nil, err
+		}
+
+		if GlobalWriteFiles {
+			if filePath, ok := request.Params.Arguments["file_path"].(string); ok && filePath != "" {
+				outputPath := generateOutputFilename(filePath, format)
+				err := os.WriteFile(outputPath, ascii, 0644)
+				if err != nil {
+					return nil, errors.New("failed to write output file: " + err.Error())
+				}
+				return mcp.NewToolResultText("D2 diagram rendered to: " + outputPath), nil
+			}
+		}
+
+		return mcp.NewToolResultText(string(ascii)), nil
+	}
+
 	svg, err := d2.Render(ctx, code)
 	if err != nil {
 		return nil, err
@@ -93,24 +152,22 @@ func RenderD2Handler(
 		imgType string
 	)
 
-	if GlobalImageType == "png" {
+	if format == "png" {
 		png, err := SvgToPng(ctx, svg)
 		if err != nil {
 			return nil, err
 		}
 		img = png
 		imgType = "image/png"
-	} else if GlobalImageType == "svg" {
+	} else {
 		img = svg
 		imgType = "image/svg+xml"
-	} else {
-		return nil, errors.New("invalid image type: " + GlobalImageType)
 	}
 
 	// Write to file if --write-files flag is enabled AND file_path was provided
 	if GlobalWriteFiles {
 		if filePath, ok := request.Params.Arguments["file_path"].(string); ok && filePath != "" {
-			outputPath := generateOutputFilename(filePath, GlobalImageType)
+			outputPath := generateOutputFilename(filePath, format)
 			err := os.WriteFile(outputPath, img, 0644)
 			if err != nil {
 				return nil, errors.New("failed to write output file: " + err.Error())
