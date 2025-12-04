@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"oss.terrastruct.com/d2/d2themes/d2themescatalog"
@@ -49,13 +50,13 @@ func formatThemeName(name string) string {
 	// Convert "NeutralDefault" to "Neutral default"
 	var result strings.Builder
 	for i, r := range name {
-		if i > 0 && r >= 'A' && r <= 'Z' {
+		if i > 0 && unicode.IsUpper(r) {
 			result.WriteRune(' ')
 		}
 		if i == 0 {
 			result.WriteRune(r)
 		} else {
-			result.WriteRune(r | 0x20) // lowercase
+			result.WriteRune(unicode.ToLower(r))
 		}
 	}
 	return result.String()

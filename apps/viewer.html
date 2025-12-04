@@ -4,19 +4,33 @@
     <meta charset="utf-8" />
     <title>D2 Diagram Viewer</title>
     <style>
+      /* OpenAI Apps SDK Design System */
       * {
         box-sizing: border-box;
       }
 
       :root {
-        color: #1a1a1a;
+        /* System color palette - aligned with ChatGPT */
+        --color-text-primary: #0d0d0d;
+        --color-text-secondary: #676767;
+        --color-text-tertiary: #8e8e8e;
+        --color-bg-primary: #ffffff;
+        --color-bg-secondary: #f7f7f7;
+        --color-border-light: #ececec;
+        --color-border-medium: #d9d9d9;
+        --color-interactive-hover: #f0f0f0;
+        --color-interactive-active: #e5e5e5;
+        --color-error: #d93025;
+
+        /* System typography */
         font-family:
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "SF Pro",
-          "Roboto",
-          sans-serif;
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          system-ui, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--color-text-primary);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
       html,
@@ -28,42 +42,42 @@
       }
 
       body {
-        padding: 0;
-        background: #ffffff;
+        background: var(--color-bg-primary);
+        padding: 12px;
       }
 
       main {
         width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
 
-      .content-wrapper {
-        width: 100%;
-        max-width: 640px;
-        margin: 0 auto;
-        padding: 1rem;
-      }
-
+      /* Diagram container - separate card */
       #diagram-container {
         position: relative;
         width: 100%;
-        min-height: 280px;
-        max-height: 360px;
-        background: #fafafa;
-        border-bottom: 1px solid #e5e5e5;
+        min-height: 320px;
+        max-height: 400px;
+        background: var(--color-bg-secondary);
+        border: 1px solid var(--color-border-light);
+        border-radius: 12px;
         overflow: hidden;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
       }
 
       #diagram {
         width: 100%;
         height: 100%;
-        min-height: 280px;
-        max-height: 360px;
+        min-height: 320px;
+        max-height: 400px;
         overflow: auto;
-        padding: 1rem;
+        padding: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: grab;
+        user-select: none;
       }
 
       #diagram.panning {
@@ -72,187 +86,351 @@
 
       #diagram-content {
         transform-origin: center center;
-        transition: transform 0.1s ease-out;
+        transition:
+          transform 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+          opacity 0.2s ease-in-out;
       }
 
       #diagram svg {
         width: 100%;
-        max-height: 340px;
+        max-height: 368px;
         height: auto;
       }
 
       #diagram img {
         width: 100%;
-        max-height: 340px;
+        max-height: 368px;
         height: auto;
-        border-radius: 0.25rem;
       }
 
+      /* Zoom controls - minimal design */
       .zoom-controls {
         position: absolute;
-        bottom: 0.5rem;
-        right: 0.5rem;
+        bottom: 12px;
+        right: 12px;
         display: flex;
-        gap: 0.25rem;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #e5e5e5;
-        border-radius: 0.375rem;
-        padding: 0.25rem;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid var(--color-border-light);
+        border-radius: 8px;
+        padding: 4px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
         z-index: 10;
       }
 
       .zoom-btn {
-        width: 2rem;
-        height: 2rem;
+        width: 32px;
+        height: 32px;
         border: none;
-        background: #ffffff;
-        color: #525252;
-        border-radius: 0.25rem;
+        background: transparent;
+        color: var(--color-text-secondary);
+        border-radius: 4px;
         cursor: pointer;
-        font-size: 1rem;
-        font-weight: 600;
+        font-size: 18px;
+        font-weight: 400;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.15s;
+        transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       .zoom-btn:hover {
-        background: #f5f5f5;
-        color: #1a1a1a;
+        background: var(--color-interactive-hover);
+        color: var(--color-text-primary);
       }
 
       .zoom-btn:active {
-        background: #e5e5e5;
+        background: var(--color-interactive-active);
       }
 
+      .zoom-btn:focus-visible {
+        outline: 2px solid var(--color-border-medium);
+        outline-offset: -2px;
+      }
+
+      /* Content wrapper - separate card */
+      .content-wrapper {
+        width: 100%;
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border-light);
+        border-radius: 12px;
+        padding: 16px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      }
+
+      /* Settings panel - clean, minimal */
       .settings-panel {
-        padding: 0.75rem 0;
         display: flex;
-        gap: 1rem;
-        flex-wrap: wrap;
+        gap: 12px;
+        padding: 0 0 16px 0;
+        border-bottom: 1px solid var(--color-border-light);
       }
 
       .setting-group {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 6px;
         flex: 1;
-        min-width: 120px;
+        min-width: 0;
       }
 
       .setting-group label {
-        font-size: 0.75rem;
+        font-size: 13px;
         font-weight: 500;
-        color: #525252;
+        color: var(--color-text-secondary);
+        letter-spacing: -0.01em;
       }
 
       .setting-group select {
-        padding: 0.375rem 0.5rem;
-        border: 1px solid #d4d4d4;
-        border-radius: 0.375rem;
-        background: #ffffff;
-        font-size: 0.8125rem;
-        color: #1a1a1a;
+        padding: 8px 10px;
+        border: 1px solid var(--color-border-medium);
+        border-radius: 6px;
+        background: var(--color-bg-primary);
+        font-size: 14px;
+        font-weight: 400;
+        color: var(--color-text-primary);
         cursor: pointer;
+        transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23676767' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        padding-right: 32px;
       }
 
       .setting-group select:hover {
-        border-color: #a3a3a3;
+        border-color: var(--color-text-secondary);
       }
 
       .setting-group select:focus {
         outline: none;
-        border-color: #525252;
+        border-color: var(--color-text-primary);
+        box-shadow: 0 0 0 3px rgba(13, 13, 13, 0.06);
       }
 
+      /* Details/summary - minimal disclosure */
       details {
-        margin-top: 1rem;
+        margin-top: 16px;
+        margin-bottom: 0;
+      }
+
+      details[open] {
+        padding-bottom: 4px;
       }
 
       summary {
         cursor: pointer;
-        color: #525252;
-        font-size: 0.875rem;
+        color: var(--color-text-secondary);
+        font-size: 13px;
         font-weight: 500;
-        padding: 0.5rem 0;
+        padding: 8px 0;
         user-select: none;
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      summary::-webkit-details-marker {
+        display: none;
+      }
+
+      summary::before {
+        content: "›";
+        font-size: 16px;
+        font-weight: 600;
+        transition: transform 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+        display: inline-block;
+      }
+
+      details[open] summary::before {
+        transform: rotate(90deg);
       }
 
       summary:hover {
-        color: #1a1a1a;
+        color: var(--color-text-primary);
       }
 
+      /* Code preview - subtle, readable */
       pre {
-        background: #fafafa;
-        border: 1px solid #e5e5e5;
-        padding: 0.75rem;
-        border-radius: 0.5rem;
+        background: var(--color-bg-secondary);
+        border: 1px solid var(--color-border-light);
+        padding: 12px;
+        border-radius: 8px;
         overflow: auto;
-        font-size: 0.8125rem;
-        line-height: 1.5;
-        max-height: 12rem;
-        margin: 0.5rem 0 0;
-        color: #262626;
+        font-family:
+          ui-monospace, "SF Mono", Monaco, "Cascadia Mono", "Roboto Mono",
+          Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        max-height: 240px;
+        margin: 8px 0 0 0;
+        color: var(--color-text-primary);
+        position: relative;
       }
 
+      #code-preview {
+        margin-bottom: 0;
+      }
+
+      /* ASCII diagram styling */
+      #diagram-content pre {
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin: 0;
+        max-height: none;
+        text-align: left;
+        white-space: pre;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      /* Action buttons */
+      .action-buttons {
+        display: flex;
+        gap: 8px;
+        margin: 12px 0 0 0;
+        padding: 12px 0 0 0;
+        border-top: 1px solid var(--color-border-light);
+      }
+
+      .action-btn {
+        padding: 6px 12px;
+        border: 1px solid var(--color-border-medium);
+        border-radius: 6px;
+        background: var(--color-bg-primary);
+        color: var(--color-text-secondary);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .action-btn:hover {
+        background: var(--color-interactive-hover);
+        color: var(--color-text-primary);
+        border-color: var(--color-text-secondary);
+      }
+
+      .action-btn:active {
+        background: var(--color-interactive-active);
+      }
+
+      .action-btn:focus-visible {
+        outline: 2px solid var(--color-text-primary);
+        outline-offset: 2px;
+      }
+
+      .action-btn-primary {
+        background: var(--color-text-primary);
+        color: var(--color-bg-primary);
+        border-color: var(--color-text-primary);
+        font-weight: 600;
+      }
+
+      .action-btn-primary:hover {
+        background: var(--color-text-secondary);
+        border-color: var(--color-text-secondary);
+        color: var(--color-bg-primary);
+      }
+
+      .action-btn-primary:active {
+        opacity: 0.8;
+      }
+
+      /* Copy button in code preview */
+      .copy-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        padding: 4px 8px;
+        border: 1px solid var(--color-border-medium);
+        border-radius: 4px;
+        background: var(--color-bg-primary);
+        color: var(--color-text-secondary);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .copy-btn:hover {
+        background: var(--color-interactive-hover);
+        color: var(--color-text-primary);
+      }
+
+      .copy-btn.copied {
+        color: #10a37f;
+        border-color: #10a37f;
+      }
+
+      /* Error state */
       .error-msg {
-        color: #b91c1c;
-        font-size: 0.875rem;
+        color: var(--color-error);
+        font-size: 14px;
+        font-weight: 400;
         text-align: center;
       }
 
+      /* Dark mode - system palette */
       @media (prefers-color-scheme: dark) {
+        :root {
+          --color-text-primary: #ececec;
+          --color-text-secondary: #b4b4b4;
+          --color-text-tertiary: #8e8e8e;
+          --color-bg-primary: #212121;
+          --color-bg-secondary: #2f2f2f;
+          --color-border-light: #3f3f3f;
+          --color-border-medium: #565656;
+          --color-interactive-hover: #3a3a3a;
+          --color-interactive-active: #444444;
+          --color-error: #f28b82;
+        }
+
         body {
-          background: #000000;
+          background: var(--color-bg-primary);
         }
 
-        :root,
-        h2 {
-          color: #fafafa;
+        #diagram-container {
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
 
-        .status {
-          color: #a3a3a3;
-          background: #171717;
+        .content-wrapper {
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
 
-        .status.loading {
-          color: #fcd34d;
-          background: #422006;
+        .zoom-controls {
+          background: rgba(33, 33, 33, 0.96);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
 
-        .status.ready {
-          color: #86efac;
-          background: #14532d;
+        .setting-group select {
+          background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23b4b4b4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
         }
 
-        .status.error {
-          color: #fca5a5;
-          background: #450a0a;
+        .setting-group select:focus {
+          box-shadow: 0 0 0 3px rgba(236, 236, 236, 0.1);
+        }
+      }
+
+      /* Accessibility - focus states */
+      *:focus-visible {
+        outline: 2px solid var(--color-text-primary);
+        outline-offset: 2px;
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 640px) {
+        .settings-panel {
+          flex-direction: column;
+          gap: 16px;
         }
 
-        #diagram {
-          background: #0a0a0a;
-          border-color: #262626;
-        }
-
-        summary {
-          color: #a3a3a3;
-        }
-
-        summary:hover {
-          color: #fafafa;
-        }
-
-        pre {
-          background: #0a0a0a;
-          border-color: #262626;
-          color: #d4d4d4;
-        }
-
-        .error-msg {
-          color: #fca5a5;
+        .setting-group {
+          min-width: 100%;
         }
       }
     </style>
@@ -264,9 +442,30 @@
           <div id="diagram-content">Initializing...</div>
         </div>
         <div class="zoom-controls">
-          <button class="zoom-btn" id="zoom-in" title="Zoom in">+</button>
-          <button class="zoom-btn" id="zoom-out" title="Zoom out">−</button>
-          <button class="zoom-btn" id="zoom-reset" title="Reset view">⟲</button>
+          <button
+            class="zoom-btn"
+            id="zoom-in"
+            title="Zoom in"
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+          <button
+            class="zoom-btn"
+            id="zoom-out"
+            title="Zoom out"
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <button
+            class="zoom-btn"
+            id="zoom-reset"
+            title="Reset view"
+            aria-label="Reset zoom and pan"
+          >
+            ⟲
+          </button>
         </div>
       </div>
       <div class="content-wrapper">
@@ -282,7 +481,6 @@
             <select id="layout-select">
               <option value="dagre">Dagre</option>
               <option value="elk">ELK</option>
-              <option value="ascii">ASCII</option>
             </select>
           </div>
           <div class="setting-group">
@@ -293,9 +491,44 @@
             </select>
           </div>
         </div>
+        <div class="action-buttons" id="action-buttons" style="display: none">
+          <button
+            class="action-btn action-btn-primary"
+            id="export-primary"
+            aria-label="Export diagram"
+          >
+            <span>↓</span> <span id="export-label">Export</span>
+          </button>
+          <button
+            class="action-btn"
+            id="export-svg"
+            aria-label="Download SVG"
+            style="display: none"
+          >
+            <span>↓</span> SVG
+          </button>
+          <button
+            class="action-btn"
+            id="export-png"
+            aria-label="Download PNG"
+            style="display: none"
+          >
+            <span>↓</span> PNG
+          </button>
+          <button
+            class="action-btn"
+            id="copy-ascii"
+            aria-label="Copy ASCII"
+            style="display: none"
+          >
+            <span>📋</span> Copy ASCII
+          </button>
+        </div>
         <details>
           <summary>View source code</summary>
-          <pre id="code-preview"></pre>
+          <pre id="code-preview" tabindex="0">
+            <button class="copy-btn" id="copy-code" aria-label="Copy code">Copy</button>
+          </pre>
         </details>
       </div>
     </main>
@@ -309,8 +542,10 @@
       const data = window.openai?.toolOutput ?? {};
 
       // Display the source code
+      const copyCodeBtn = document.querySelector("#copy-code");
       if (data.code) {
         codeEl.textContent = data.code;
+        codeEl.appendChild(copyCodeBtn);
       }
 
       // Zoom and pan state
@@ -359,10 +594,14 @@
         updateTransform();
       });
 
-      document.addEventListener("mouseup", () => {
+      const stopDragging = () => {
         isDragging = false;
         diagramEl.classList.remove("panning");
-      });
+      };
+
+      document.addEventListener("mouseup", stopDragging);
+      document.addEventListener("mouseleave", stopDragging);
+      diagramEl.addEventListener("mouseleave", stopDragging);
 
       // Zoom with mouse wheel
       diagramEl.addEventListener("wheel", (e) => {
@@ -378,24 +617,35 @@
       const sketchSelect = document.querySelector("#sketch-select");
 
       let d2Instance = null;
+      let renderTimeout = null;
 
       // Try to render with d2.js first, fall back to pre-rendered content
       async function renderWithD2JS() {
-        if (!data.code) {
+        // Show loading state
+        diagramContentEl.style.opacity = "0.5";
+
+        if (!data.code || data.code.trim() === "") {
           throw new Error("No D2 code provided");
         }
 
         // Dynamic import from jsDelivr ESM (only once)
         if (!d2Instance) {
-          const d2Module =
-            await import("https://cdn.jsdelivr.net/npm/@terrastruct/d2@0.1.33/+esm");
-          const D2 = d2Module.default || d2Module.D2;
-          d2Instance = new D2();
+          try {
+            const d2Module =
+              await import("https://cdn.jsdelivr.net/npm/@terrastruct/d2@0.1.33/+esm");
+            const D2 = d2Module.default || d2Module.D2;
+            d2Instance = new D2();
+          } catch (importErr) {
+            console.error("Failed to load d2.js from CDN:", importErr);
+            throw new Error(
+              "Failed to load diagram renderer. Check your internet connection.",
+            );
+          }
         }
 
         const layout = layoutSelect.value;
         const sketch = sketchSelect.value === "true";
-        const themeID = parseInt(themeSelect.value);
+        const themeID = parseInt(themeSelect.value, 10);
 
         const result = await d2Instance.compile(data.code, {
           layout: layout,
@@ -416,38 +666,35 @@
         translateX = 0;
         translateY = 0;
         updateTransform();
+
+        // Clear loading state
+        diagramContentEl.style.opacity = "1";
+      }
+
+      // Debounced re-render function
+      function scheduleRender() {
+        if (!data.code || !d2Instance) return;
+
+        if (renderTimeout) {
+          clearTimeout(renderTimeout);
+        }
+
+        renderTimeout = setTimeout(async () => {
+          try {
+            await renderWithD2JS();
+          } catch (err) {
+            console.error("Re-render failed:", err);
+            diagramContentEl.style.opacity = "1";
+            diagramContentEl.innerHTML =
+              '<div class="error-msg">Rendering failed. Please try again.</div>';
+          }
+        }, 150);
       }
 
       // Re-render when settings change
-      themeSelect.addEventListener("change", async () => {
-        if (data.code && d2Instance) {
-          try {
-            await renderWithD2JS();
-          } catch (err) {
-            console.error("Re-render failed:", err);
-          }
-        }
-      });
-
-      layoutSelect.addEventListener("change", async () => {
-        if (data.code && d2Instance) {
-          try {
-            await renderWithD2JS();
-          } catch (err) {
-            console.error("Re-render failed:", err);
-          }
-        }
-      });
-
-      sketchSelect.addEventListener("change", async () => {
-        if (data.code && d2Instance) {
-          try {
-            await renderWithD2JS();
-          } catch (err) {
-            console.error("Re-render failed:", err);
-          }
-        }
-      });
+      themeSelect.addEventListener("change", scheduleRender);
+      layoutSelect.addEventListener("change", scheduleRender);
+      sketchSelect.addEventListener("change", scheduleRender);
 
       // Fallback to pre-rendered content
       function renderFallback() {
@@ -484,27 +731,189 @@
       // Main render logic
       async function render() {
         // If we have code, try d2.js first
-        if (data.code && data.live !== false) {
+        if (data.code && data.code.trim() !== "" && data.live !== false) {
           try {
             await renderWithD2JS();
             return;
           } catch (err) {
             console.error("d2.js render failed:", err);
+            diagramContentEl.style.opacity = "1";
             // Fall back to pre-rendered content
           }
         }
 
         // Try pre-rendered fallback
         if (renderFallback()) {
+          diagramContentEl.style.opacity = "1";
           return;
         }
 
         // No data available
+        diagramContentEl.style.opacity = "1";
         diagramContentEl.innerHTML =
           '<div class="error-msg">No diagram data available</div>';
       }
 
       render();
+
+      // Export and Copy functionality
+      const actionButtons = document.querySelector("#action-buttons");
+      const exportPrimaryBtn = document.querySelector("#export-primary");
+      const exportLabel = document.querySelector("#export-label");
+      const exportSvgBtn = document.querySelector("#export-svg");
+      const exportPngBtn = document.querySelector("#export-png");
+      const copyAsciiBtn = document.querySelector("#copy-ascii");
+
+      let currentFormat = "svg"; // Track current format
+
+      // Copy to clipboard helper
+      async function copyToClipboard(text, button) {
+        try {
+          await navigator.clipboard.writeText(text);
+          const originalText = button.textContent;
+          button.textContent = "✓ Copied!";
+          button.classList.add("copied");
+          setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove("copied");
+          }, 2000);
+        } catch (err) {
+          console.error("Failed to copy:", err);
+          button.textContent = "✗ Failed";
+          setTimeout(() => {
+            button.textContent = originalText;
+          }, 2000);
+        }
+      }
+
+      // Primary export button - smart export based on format
+      exportPrimaryBtn.addEventListener("click", () => {
+        if (currentFormat === "ascii") {
+          copyAsciiBtn.click();
+        } else if (currentFormat === "png") {
+          exportPngBtn.click();
+        } else {
+          exportSvgBtn.click();
+        }
+      });
+
+      // Copy D2 code
+      copyCodeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (data.code) {
+          copyToClipboard(data.code, copyCodeBtn);
+        }
+      });
+
+      // Copy ASCII diagram
+      copyAsciiBtn.addEventListener("click", () => {
+        if (data.ascii) {
+          copyToClipboard(data.ascii, copyAsciiBtn);
+        }
+      });
+
+      // Download SVG
+      exportSvgBtn.addEventListener("click", () => {
+        if (data.svgBase64) {
+          try {
+            const svgText = atob(data.svgBase64);
+            const blob = new Blob([svgText], { type: "image/svg+xml" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "diagram.svg";
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch (err) {
+            console.error("Failed to download SVG:", err);
+          }
+        } else {
+          // Export current rendered SVG
+          const svg = diagramContentEl.querySelector("svg");
+          if (svg) {
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const blob = new Blob([svgData], { type: "image/svg+xml" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "diagram.svg";
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        }
+      });
+
+      // Download PNG
+      exportPngBtn.addEventListener("click", () => {
+        if (data.pngBase64) {
+          const a = document.createElement("a");
+          a.href = "data:image/png;base64," + data.pngBase64;
+          a.download = "diagram.png";
+          a.click();
+        } else {
+          // Convert current SVG to PNG
+          const svg = diagramContentEl.querySelector("svg");
+          if (svg) {
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            const img = new Image();
+
+            img.onload = () => {
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
+              canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "diagram.png";
+                a.click();
+                URL.revokeObjectURL(url);
+              });
+            };
+
+            img.src = "data:image/svg+xml;base64," + btoa(svgData);
+          }
+        }
+      });
+
+      // Show appropriate action buttons based on content
+      function updateActionButtons() {
+        const hasSvg = data.svgBase64 || diagramContentEl.querySelector("svg");
+        const hasPng = data.pngBase64;
+        const hasAscii = data.ascii;
+
+        if (hasSvg || hasPng || hasAscii) {
+          actionButtons.style.display = "flex";
+
+          // Determine current format and update label
+          if (hasAscii) {
+            currentFormat = "ascii";
+            exportLabel.textContent = "Copy ASCII";
+            exportPrimaryBtn.querySelector("span:first-child").textContent =
+              "📋";
+          } else if (hasPng && !hasSvg) {
+            currentFormat = "png";
+            exportLabel.textContent = "Download PNG";
+            exportPrimaryBtn.querySelector("span:first-child").textContent =
+              "↓";
+          } else {
+            currentFormat = "svg";
+            exportLabel.textContent = "Download SVG";
+            exportPrimaryBtn.querySelector("span:first-child").textContent =
+              "↓";
+          }
+
+          // Show secondary export options
+          exportSvgBtn.style.display = hasSvg ? "flex" : "none";
+          exportPngBtn.style.display = hasSvg || hasPng ? "flex" : "none";
+          copyAsciiBtn.style.display = hasAscii ? "flex" : "none";
+        }
+      }
+
+      // Update buttons after render
+      setTimeout(updateActionButtons, 100);
     </script>
   </body>
 </html>
