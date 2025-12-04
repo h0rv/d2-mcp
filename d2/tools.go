@@ -13,6 +13,7 @@ import (
 	"oss.terrastruct.com/d2/d2renderers/d2svg"
 	"oss.terrastruct.com/d2/d2target"
 	"oss.terrastruct.com/d2/d2themes/d2themescatalog"
+	d2log "oss.terrastruct.com/d2/lib/log"
 	"oss.terrastruct.com/d2/lib/textmeasure"
 	"oss.terrastruct.com/util-go/go2"
 )
@@ -29,6 +30,7 @@ var (
 )
 
 func Compile(ctx context.Context, code string) (diagram *d2target.Diagram, graph *d2graph.Graph, compileError error, otherError error) {
+	ctx = d2log.WithDefault(ctx)
 	ruler, otherErr := textmeasure.NewRuler()
 	if otherErr != nil {
 		log.Printf("error creating ruler: %v", otherErr)

@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,25 +10,23 @@ import (
 	"strings"
 
 	d2 "github.com/h0rv/d2-mcp/d2"
-
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// getArguments safely returns request arguments as a map, decoding JSON when needed.
-func getArguments(request mcp.CallToolRequest) map[string]any {
-	if args := request.GetArguments(); args != nil {
-		return args
+// getArguments unmarshals request arguments from JSON
+func getArguments(request *mcp.CallToolRequest) (map[string]any, error) {
+	if request.Params.Arguments == nil || len(request.Params.Arguments) == 0 {
+		return map[string]any{}, nil
 	}
 
-	var decoded map[string]any
-	if err := request.BindArguments(&decoded); err == nil && decoded != nil {
-		return decoded
+	var args map[string]any
+	if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal arguments: %w", err)
 	}
-
-	return map[string]any{}
+	return args, nil
 }
 
-// getCodeFromRequest extracts D2 code from either the "code" parameter or by reading from "file_path"
+// getCodeFromArgs extracts D2 code from either the "code" parameter or by reading from "file_path"
 func getCodeFromArgs(args map[string]any) (string, error) {
 	// Check if code is provided directly
 	if code, ok := args["code"].(string); ok && code != "" {
@@ -73,11 +71,46 @@ func generateOutputFilename(inputPath, format string) string {
 	return filepath.Join(dir, base+ext)
 }
 
+// newTextResult creates a CallToolResult with text content
+func newTextResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: text},
+		},
+	}
+}
+
+// newErrorResult creates a CallToolResult indicating an error
+func newErrorResult(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: text},
+		},
+		IsError: true,
+	}
+}
+
+// newImageResult creates a CallToolResult with an image (data should be raw bytes, SDK handles base64 encoding)
+func newImageResult(text string, data []byte, mimeType string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.ImageContent{
+				Data:     data,
+				MIMEType: mimeType,
+			},
+		},
+	}
+}
+
 func CompileD2Handler(
 	ctx context.Context,
-	request mcp.CallToolRequest,
+	request *mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
-	args := getArguments(request)
+	args, err := getArguments(request)
+	if err != nil {
+		return nil, err
+	}
+
 	code, err := getCodeFromArgs(args)
 	if err != nil {
 		return nil, err
@@ -89,17 +122,25 @@ func CompileD2Handler(
 	}
 
 	if compileErr != nil {
-		return mcp.NewToolResultError(compileErr.Error()), nil
+		return newErrorResult(compileErr.Error()), nil
 	}
 
-	return mcp.NewToolResultText("D2 script compiled successfully"), nil
+	return newTextResult("D2 script compiled successfully"), nil
 }
 
 func RenderD2Handler(
 	ctx context.Context,
-	request mcp.CallToolRequest,
+	request *mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
-	args := getArguments(request)
+	if GlobalAppsSDKEnabled {
+		return RenderD2AppsHandler(ctx, request)
+	}
+
+	args, err := getArguments(request)
+	if err != nil {
+		return nil, err
+	}
+
 	code, err := getCodeFromArgs(args)
 	if err != nil {
 		return nil, err
@@ -150,11 +191,11 @@ func RenderD2Handler(
 				if err := os.WriteFile(outputPath, ascii, 0644); err != nil {
 					return nil, errors.New("failed to write output file: " + err.Error())
 				}
-				return mcp.NewToolResultText("D2 diagram rendered to: " + outputPath), nil
+				return newTextResult("D2 diagram rendered to: " + outputPath), nil
 			}
 		}
 
-		return mcp.NewToolResultText(string(ascii)), nil
+		return newTextResult(string(ascii)), nil
 	}
 
 	svg, err := d2.Render(ctx, code)
@@ -186,22 +227,21 @@ func RenderD2Handler(
 			if err := os.WriteFile(outputPath, img, 0644); err != nil {
 				return nil, errors.New("failed to write output file: " + err.Error())
 			}
-			return mcp.NewToolResultText("D2 diagram rendered to: " + outputPath), nil
+			return newTextResult("D2 diagram rendered to: " + outputPath), nil
 		}
 	}
 
-	// Always return base64 encoded image by default
-	imageEncoded := base64.StdEncoding.EncodeToString(img)
-	return mcp.NewToolResultImage("D2 diagram", imageEncoded, imgType), nil
+	// Return image (SDK handles base64 encoding)
+	return newImageResult("D2 diagram", img, imgType), nil
 }
 
 func FetchD2CheatSheetHandler(
 	ctx context.Context,
-	request mcp.CallToolRequest,
+	request *mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
 	cheatSheet, err := loadCheatSheet()
 	if err != nil {
 		return nil, err
 	}
-	return mcp.NewToolResultText(cheatSheet), nil
+	return newTextResult(cheatSheet), nil
 }

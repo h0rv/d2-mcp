@@ -1,16 +1,17 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 var GlobalRenderFormat string
@@ -18,6 +19,7 @@ var GlobalWriteFiles bool
 var GlobalASCIIMode string
 var supportedFormats []string
 var supportedFormatSet map[string]struct{}
+var GlobalAppsSDKEnabled bool
 
 func containsFormat(formats []string, target string) bool {
 	for _, f := range formats {
@@ -28,46 +30,72 @@ func containsFormat(formats []string, target string) bool {
 	return false
 }
 
-func buildServerTools(formats []string) []server.ServerTool {
+func registerServerTools(s *mcp.Server, formats []string) {
 	formatList := strings.Join(formats, ", ")
 
-	renderOptions := []mcp.ToolOption{
-		mcp.WithDescription(fmt.Sprintf("Render a D2 diagram in %s format", formatList)),
-		mcp.WithString("code", mcp.Description("The D2 code to render (either this or file_path is required)")),
-		mcp.WithString("file_path", mcp.Description("Path to a D2 file to render (either this or code is required)")),
-		mcp.WithString("format",
-			mcp.Description(fmt.Sprintf("Optional output format override (%s)", formatList)),
-			mcp.Enum(formats...),
-		),
+	// compile-d2 tool
+	s.AddTool(&mcp.Tool{
+		Name:        "compile-d2",
+		Description: "Compile D2 code to validate and check for errors",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"code": map[string]any{
+					"type":        "string",
+					"description": "The D2 code to compile (either this or file_path is required)",
+				},
+				"file_path": map[string]any{
+					"type":        "string",
+					"description": "Path to a D2 file to compile (either this or code is required)",
+				},
+			},
+		},
+	}, CompileD2Handler)
+
+	// render-d2 tool
+	renderSchema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"code": map[string]any{
+				"type":        "string",
+				"description": "The D2 code to render (either this or file_path is required)",
+			},
+			"file_path": map[string]any{
+				"type":        "string",
+				"description": "Path to a D2 file to render (either this or code is required)",
+			},
+			"format": map[string]any{
+				"type":        "string",
+				"description": fmt.Sprintf("Optional output format override (%s)", formatList),
+				"enum":        formats,
+			},
+		},
 	}
 
 	if containsFormat(formats, "ascii") {
-		renderOptions = append(renderOptions, mcp.WithString("ascii_mode",
-			mcp.Description("ASCII rendering mode when format=ascii (extended, standard)"),
-			mcp.Enum("extended", "standard"),
-		))
+		props := renderSchema["properties"].(map[string]any)
+		props["ascii_mode"] = map[string]any{
+			"type":        "string",
+			"description": "ASCII rendering mode when format=ascii (extended, standard)",
+			"enum":        []string{"extended", "standard"},
+		}
 	}
 
-	return []server.ServerTool{
-		{
-			Tool: mcp.NewTool("compile-d2",
-				mcp.WithDescription("Compile D2 code to validate and check for errors"),
-				mcp.WithString("code", mcp.Description("The D2 code to compile (either this or file_path is required)")),
-				mcp.WithString("file_path", mcp.Description("Path to a D2 file to compile (either this or code is required)")),
-			),
-			Handler: CompileD2Handler,
+	s.AddTool(&mcp.Tool{
+		Name:        "render-d2",
+		Description: fmt.Sprintf("Render a D2 diagram in %s format", formatList),
+		InputSchema: renderSchema,
+	}, RenderD2Handler)
+
+	// fetch_d2_cheat_sheet tool
+	s.AddTool(&mcp.Tool{
+		Name:        "fetch_d2_cheat_sheet",
+		Description: "Retrieve the bundled D2 quick-reference cheat sheet in Markdown.",
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{},
 		},
-		{
-			Tool:    mcp.NewTool("render-d2", renderOptions...),
-			Handler: RenderD2Handler,
-		},
-		{
-			Tool: mcp.NewTool("fetch_d2_cheat_sheet",
-				mcp.WithDescription("Retrieve the bundled D2 quick-reference cheat sheet in Markdown."),
-			),
-			Handler: FetchD2CheatSheetHandler,
-		},
-	}
+	}, FetchD2CheatSheetHandler)
 }
 
 func detectPNGSupport() bool {
@@ -81,15 +109,15 @@ func detectPNGSupport() bool {
 }
 
 func main() {
-
 	var transport string
-	flag.StringVar(&transport, "t", "stdio", "Transport type (stdio, sse, http)")
-	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, sse, http)")
-	sseFlag := flag.Bool("sse", false, "Enable SSE transport (deprecated, use --transport=sse)")
+	flag.StringVar(&transport, "t", "stdio", "Transport type (stdio, http)")
+	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, http)")
+	sseFlag := flag.Bool("sse", false, "Enable SSE transport (deprecated, use --transport=http)")
 	port := flag.Int("port", 8080, "The port to run the server on")
 	imageType := flag.String("image-type", "png", "The output format to render (png, svg, ascii)")
 	writeFiles := flag.Bool("write-files", false, "Write output files to disk when using file_path (default: return base64)")
 	asciiMode := flag.String("ascii-mode", "extended", "ASCII rendering mode when format is ascii (extended, standard)")
+	enableAppsSDK := flag.Bool("enable-apps-sdk", false, "Register ChatGPT Apps SDK resources and tools")
 	flag.Parse()
 
 	var (
@@ -106,8 +134,8 @@ func main() {
 	})
 
 	if *sseFlag {
-		log.Println("Warning: --sse is deprecated, use --transport=sse instead.")
-		transport = "sse"
+		log.Println("Warning: --sse is deprecated, use --transport=http instead.")
+		transport = "http"
 	}
 
 	if !transportFlagSet && !*sseFlag {
@@ -118,7 +146,7 @@ func main() {
 
 	if !transportFlagSet && !*sseFlag {
 		if env := os.Getenv("SSE_MODE"); strings.EqualFold(env, "true") {
-			transport = "sse"
+			transport = "http"
 		}
 	}
 
@@ -143,6 +171,11 @@ func main() {
 		transport = "stdio"
 	}
 
+	// Map old "sse" to "http"
+	if transport == "sse" {
+		transport = "http"
+	}
+
 	format := strings.ToLower(*imageType)
 	if format != "png" && format != "svg" && format != "ascii" {
 		log.Fatalf("Invalid render format: %s", *imageType)
@@ -156,6 +189,7 @@ func main() {
 	GlobalRenderFormat = format
 	GlobalWriteFiles = *writeFiles
 	GlobalASCIIMode = mode
+	GlobalAppsSDKEnabled = *enableAppsSDK
 
 	// Determine supported formats based on environment/tool availability.
 	pngSupported := detectPNGSupport()
@@ -187,36 +221,50 @@ func main() {
 		GlobalRenderFormat = fallback
 	}
 
-	s := server.NewMCPServer(
-		"d2-mcp",
-		"1.0.0",
-		server.WithLogging(),
-		server.WithInstructions(serverInstructions),
-	)
+	// Create the MCP server
+	s := mcp.NewServer(&mcp.Implementation{
+		Name:    "d2-mcp",
+		Version: "1.0.0",
+	}, &mcp.ServerOptions{
+		Instructions: serverInstructions,
+	})
 
-	s.SetTools(buildServerTools(supportedFormats)...)
+	// Register standard tools
+	registerServerTools(s, supportedFormats)
+
+	// Register Apps SDK tools and resources
+	if *enableAppsSDK {
+		registerAppsTools(s, supportedFormats)
+		registerAppsResources(s)
+	}
 
 	switch transport {
 	case "stdio":
 		log.Println("Starting d2-mcp service (transport: stdio)...")
-		if err := server.ServeStdio(s); err != nil {
-			log.Fatalf("Server error: %v\n", err)
-		}
-	case "sse":
-		url := fmt.Sprintf("http://localhost:%d", *port)
-		sseServer := server.NewSSEServer(s, server.WithSSEEndpoint(url))
-		log.Println("Starting d2-mcp service (transport: sse) on " + url + "...")
-		if err := sseServer.Start(fmt.Sprintf(":%d", *port)); err != nil {
+		if err := s.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 			log.Fatalf("Server error: %v\n", err)
 		}
 	case "http":
 		addr := fmt.Sprintf(":%d", *port)
-		httpServer := server.NewStreamableHTTPServer(s)
-		log.Println("Starting d2-mcp service (transport: http) on http://localhost" + addr + "/mcp ...")
-		if err := httpServer.Start(addr); err != nil {
+		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+			return s
+		}, nil)
+		// Wrap with logging and path handling
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Printf("[HTTP] %s %s", r.Method, r.URL.Path)
+			// Strip /mcp prefix if present
+			if r.URL.Path == "/mcp" || r.URL.Path == "/mcp/" {
+				r.URL.Path = "/"
+			} else if len(r.URL.Path) > 4 && r.URL.Path[:5] == "/mcp/" {
+				r.URL.Path = r.URL.Path[4:]
+			}
+			mcpHandler.ServeHTTP(w, r)
+		})
+		log.Printf("Starting d2-mcp service (transport: http) on http://localhost%s/mcp ...", addr)
+		if err := http.ListenAndServe(addr, handler); err != nil {
 			log.Fatalf("Server error: %v\n", err)
 		}
 	default:
-		log.Fatalf("Invalid transport type: %s. Must be 'stdio', 'sse', or 'http'", transport)
+		log.Fatalf("Invalid transport type: %s. Must be 'stdio' or 'http'", transport)
 	}
 }

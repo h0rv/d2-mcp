@@ -199,6 +199,52 @@ Retrieve the built-in quick reference as Markdown:
 
 The cheat sheet highlights common shapes, layout tips, and ASCII-friendly patterns, making it ideal support material for downstream LLM prompts.
 
+## ChatGPT Apps SDK mode
+
+- Start the server with the Apps UI assets and resources enabled:
+
+  ```bash
+  go run . --transport http --port 8080 --enable-apps-sdk --image-type svg
+  ```
+
+- Register the HTTP transport in your ChatGPT Apps SDK config (example):
+
+  ```json
+  {
+    "providers": {
+      "d2": {
+        "transport": { "type": "http", "url": "http://localhost:8080/mcp" }
+      }
+    },
+    "components": {
+      "d2Viewer": { "resource": "mcp://d2-mcp/apps/viewer" }
+    }
+  }
+  ```
+
+- Use the new `render-d2-app` tool instead of `render-d2` when you want the HTML viewer. It returns:
+  - `structuredContent` with the D2 source plus base64 SVG/PNG/ASCII
+  - An embedded resource (`text/html+skybridge`) that ChatGPT renders inline via the registered `d2Viewer`.
+
+- When `--enable-apps-sdk` is on, even `render-d2` routes through the interactive HTML viewer by default, so Apps clients always see the live preview.
+- The classic tools (`compile-d2`, `render-d2`, `fetch_d2_cheat_sheet`) remain available; Apps SDK behavior is gated by `--enable-apps-sdk`.
+- The bundled viewer attempts live client-side rendering via `@terrastruct/d2` from jsdelivr; if the CDN or WASM load fails, it gracefully falls back to the server-returned SVG/PNG/ASCII.
+
+### Expose to ChatGPT (ngrok)
+
+During development, expose the HTTP transport so ChatGPT can reach `/mcp`:
+
+```bash
+ngrok http 8080
+# sample forward URL: https://<subdomain>.ngrok.app
+```
+
+When configuring your connector, use the forwarded URL with the MCP path:
+
+```
+https://<subdomain>.ngrok.app/mcp
+```
+
 ## Transports
 
 The server defaults to stdio transport for CLI-driven MCP clients. Switch transports per run:

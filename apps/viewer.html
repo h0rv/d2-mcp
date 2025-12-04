@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>D2 Diagram Viewer</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        color: #1a1a1a;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "SF Pro",
+          "Roboto",
+          sans-serif;
+      }
+
+      html,
+      body {
+        width: 100%;
+        min-height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        padding: 0;
+        background: #ffffff;
+      }
+
+      main {
+        width: 100%;
+      }
+
+      .content-wrapper {
+        width: 100%;
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 1rem;
+      }
+
+      #diagram-container {
+        position: relative;
+        width: 100%;
+        min-height: 280px;
+        max-height: 360px;
+        background: #fafafa;
+        border-bottom: 1px solid #e5e5e5;
+        overflow: hidden;
+      }
+
+      #diagram {
+        width: 100%;
+        height: 100%;
+        min-height: 280px;
+        max-height: 360px;
+        overflow: auto;
+        padding: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+      }
+
+      #diagram.panning {
+        cursor: grabbing;
+      }
+
+      #diagram-content {
+        transform-origin: center center;
+        transition: transform 0.1s ease-out;
+      }
+
+      #diagram svg {
+        width: 100%;
+        max-height: 340px;
+        height: auto;
+      }
+
+      #diagram img {
+        width: 100%;
+        max-height: 340px;
+        height: auto;
+        border-radius: 0.25rem;
+      }
+
+      .zoom-controls {
+        position: absolute;
+        bottom: 0.5rem;
+        right: 0.5rem;
+        display: flex;
+        gap: 0.25rem;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e5e5e5;
+        border-radius: 0.375rem;
+        padding: 0.25rem;
+        z-index: 10;
+      }
+
+      .zoom-btn {
+        width: 2rem;
+        height: 2rem;
+        border: none;
+        background: #ffffff;
+        color: #525252;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+      }
+
+      .zoom-btn:hover {
+        background: #f5f5f5;
+        color: #1a1a1a;
+      }
+
+      .zoom-btn:active {
+        background: #e5e5e5;
+      }
+
+      .settings-panel {
+        padding: 0.75rem 0;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+
+      .setting-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex: 1;
+        min-width: 120px;
+      }
+
+      .setting-group label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #525252;
+      }
+
+      .setting-group select {
+        padding: 0.375rem 0.5rem;
+        border: 1px solid #d4d4d4;
+        border-radius: 0.375rem;
+        background: #ffffff;
+        font-size: 0.8125rem;
+        color: #1a1a1a;
+        cursor: pointer;
+      }
+
+      .setting-group select:hover {
+        border-color: #a3a3a3;
+      }
+
+      .setting-group select:focus {
+        outline: none;
+        border-color: #525252;
+      }
+
+      details {
+        margin-top: 1rem;
+      }
+
+      summary {
+        cursor: pointer;
+        color: #525252;
+        font-size: 0.875rem;
+        font-weight: 500;
+        padding: 0.5rem 0;
+        user-select: none;
+      }
+
+      summary:hover {
+        color: #1a1a1a;
+      }
+
+      pre {
+        background: #fafafa;
+        border: 1px solid #e5e5e5;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        overflow: auto;
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        max-height: 12rem;
+        margin: 0.5rem 0 0;
+        color: #262626;
+      }
+
+      .error-msg {
+        color: #b91c1c;
+        font-size: 0.875rem;
+        text-align: center;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #000000;
+        }
+
+        :root,
+        h2 {
+          color: #fafafa;
+        }
+
+        .status {
+          color: #a3a3a3;
+          background: #171717;
+        }
+
+        .status.loading {
+          color: #fcd34d;
+          background: #422006;
+        }
+
+        .status.ready {
+          color: #86efac;
+          background: #14532d;
+        }
+
+        .status.error {
+          color: #fca5a5;
+          background: #450a0a;
+        }
+
+        #diagram {
+          background: #0a0a0a;
+          border-color: #262626;
+        }
+
+        summary {
+          color: #a3a3a3;
+        }
+
+        summary:hover {
+          color: #fafafa;
+        }
+
+        pre {
+          background: #0a0a0a;
+          border-color: #262626;
+          color: #d4d4d4;
+        }
+
+        .error-msg {
+          color: #fca5a5;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="diagram-container">
+        <div id="diagram">
+          <div id="diagram-content">Initializing...</div>
+        </div>
+        <div class="zoom-controls">
+          <button class="zoom-btn" id="zoom-in" title="Zoom in">+</button>
+          <button class="zoom-btn" id="zoom-out" title="Zoom out">−</button>
+          <button class="zoom-btn" id="zoom-reset" title="Reset view">⟲</button>
+        </div>
+      </div>
+      <div class="content-wrapper">
+        <div class="settings-panel">
+          <div class="setting-group">
+            <label for="theme-select">Theme</label>
+            <select id="theme-select">
+              {{THEME_OPTIONS}}
+            </select>
+          </div>
+          <div class="setting-group">
+            <label for="layout-select">Layout</label>
+            <select id="layout-select">
+              <option value="dagre">Dagre</option>
+              <option value="elk">ELK</option>
+              <option value="ascii">ASCII</option>
+            </select>
+          </div>
+          <div class="setting-group">
+            <label for="sketch-select">Style</label>
+            <select id="sketch-select">
+              <option value="false">Standard</option>
+              <option value="true">Sketch</option>
+            </select>
+          </div>
+        </div>
+        <details>
+          <summary>View source code</summary>
+          <pre id="code-preview"></pre>
+        </details>
+      </div>
+    </main>
+
+    <script type="module">
+      const diagramEl = document.querySelector("#diagram");
+      const diagramContentEl = document.querySelector("#diagram-content");
+      const codeEl = document.querySelector("#code-preview");
+
+      // Get data from ChatGPT
+      const data = window.openai?.toolOutput ?? {};
+
+      // Display the source code
+      if (data.code) {
+        codeEl.textContent = data.code;
+      }
+
+      // Zoom and pan state
+      let scale = 1;
+      let translateX = 0;
+      let translateY = 0;
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+
+      function updateTransform() {
+        diagramContentEl.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+      }
+
+      // Zoom controls
+      document.querySelector("#zoom-in").addEventListener("click", () => {
+        scale = Math.min(scale * 1.2, 5);
+        updateTransform();
+      });
+
+      document.querySelector("#zoom-out").addEventListener("click", () => {
+        scale = Math.max(scale / 1.2, 0.5);
+        updateTransform();
+      });
+
+      document.querySelector("#zoom-reset").addEventListener("click", () => {
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        updateTransform();
+      });
+
+      // Pan with mouse drag
+      diagramEl.addEventListener("mousedown", (e) => {
+        if (e.target.closest(".zoom-controls")) return;
+        isDragging = true;
+        startX = e.clientX - translateX;
+        startY = e.clientY - translateY;
+        diagramEl.classList.add("panning");
+      });
+
+      document.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        translateX = e.clientX - startX;
+        translateY = e.clientY - startY;
+        updateTransform();
+      });
+
+      document.addEventListener("mouseup", () => {
+        isDragging = false;
+        diagramEl.classList.remove("panning");
+      });
+
+      // Zoom with mouse wheel
+      diagramEl.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        scale = Math.max(0.5, Math.min(5, scale * delta));
+        updateTransform();
+      });
+
+      // Settings
+      const themeSelect = document.querySelector("#theme-select");
+      const layoutSelect = document.querySelector("#layout-select");
+      const sketchSelect = document.querySelector("#sketch-select");
+
+      let d2Instance = null;
+
+      // Try to render with d2.js first, fall back to pre-rendered content
+      async function renderWithD2JS() {
+        if (!data.code) {
+          throw new Error("No D2 code provided");
+        }
+
+        // Dynamic import from jsDelivr ESM (only once)
+        if (!d2Instance) {
+          const d2Module =
+            await import("https://cdn.jsdelivr.net/npm/@terrastruct/d2@0.1.33/+esm");
+          const D2 = d2Module.default || d2Module.D2;
+          d2Instance = new D2();
+        }
+
+        const layout = layoutSelect.value;
+        const sketch = sketchSelect.value === "true";
+        const themeID = parseInt(themeSelect.value);
+
+        const result = await d2Instance.compile(data.code, {
+          layout: layout,
+          sketch: sketch,
+          themeID: themeID,
+        });
+
+        const svg = await d2Instance.render(result.diagram, {
+          ...result.renderOptions,
+          pad: 20,
+          center: true,
+        });
+
+        diagramContentEl.innerHTML = svg;
+
+        // Reset zoom/pan when re-rendering
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        updateTransform();
+      }
+
+      // Re-render when settings change
+      themeSelect.addEventListener("change", async () => {
+        if (data.code && d2Instance) {
+          try {
+            await renderWithD2JS();
+          } catch (err) {
+            console.error("Re-render failed:", err);
+          }
+        }
+      });
+
+      layoutSelect.addEventListener("change", async () => {
+        if (data.code && d2Instance) {
+          try {
+            await renderWithD2JS();
+          } catch (err) {
+            console.error("Re-render failed:", err);
+          }
+        }
+      });
+
+      sketchSelect.addEventListener("change", async () => {
+        if (data.code && d2Instance) {
+          try {
+            await renderWithD2JS();
+          } catch (err) {
+            console.error("Re-render failed:", err);
+          }
+        }
+      });
+
+      // Fallback to pre-rendered content
+      function renderFallback() {
+        if (data.svgBase64) {
+          try {
+            const svgText = atob(data.svgBase64);
+            diagramContentEl.innerHTML = svgText;
+            return true;
+          } catch (err) {
+            console.error("SVG decode error:", err);
+          }
+        }
+
+        if (data.pngBase64) {
+          const img = document.createElement("img");
+          img.src = "data:image/png;base64," + data.pngBase64;
+          img.alt = "D2 diagram";
+          img.style.maxWidth = "100%";
+          diagramContentEl.replaceChildren(img);
+          return true;
+        }
+
+        if (data.ascii) {
+          const pre = document.createElement("pre");
+          pre.textContent = data.ascii;
+          pre.style.textAlign = "left";
+          diagramContentEl.replaceChildren(pre);
+          return true;
+        }
+
+        return false;
+      }
+
+      // Main render logic
+      async function render() {
+        // If we have code, try d2.js first
+        if (data.code && data.live !== false) {
+          try {
+            await renderWithD2JS();
+            return;
+          } catch (err) {
+            console.error("d2.js render failed:", err);
+            // Fall back to pre-rendered content
+          }
+        }
+
+        // Try pre-rendered fallback
+        if (renderFallback()) {
+          return;
+        }
+
+        // No data available
+        diagramContentEl.innerHTML =
+          '<div class="error-msg">No diagram data available</div>';
+      }
+
+      render();
+    </script>
+  </body>
+</html>
