@@ -5,15 +5,20 @@ A Model Context Protocol (MCP) server for working with [D2: Declarative Diagramm
 **Tools:**
 
 * Compile D2 Code
-    * Validate D2 syntax and catch errors before rendering
-    * Get immediate feedback on diagram structure and syntax
-    * Accepts either direct code or file path to D2 file
+  * Validate D2 syntax and catch errors before rendering
+  * Get immediate feedback on diagram structure and syntax
+  * Accepts either direct code or file path to D2 file
 * Render Diagrams
-    * Generate diagrams for visual feedback and refinement
-    * Support PNG, SVG, and ASCII output formats
-    * Accepts either direct code or file path to D2 file
+  * Generate diagrams for visual feedback and refinement
+  * Support PNG, SVG, and ASCII output formats
+  * Accepts either direct code or file path to D2 file
+  * **ChatGPT Apps SDK**: Interactive widget with live rendering, theme/layout controls, and downloads
 * Fetch D2 Cheat Sheet
-    * Returns a Markdown reference covering shapes, styling, and transport usage
+  * Returns a Markdown reference covering shapes, styling, and transport usage
+* Get Download URL *(Apps SDK only)*
+  * Creates temporary download URLs for diagrams (workaround for sandboxed iframe restrictions)
+  * Supports SVG and PNG formats
+  * Links expire after 3 minutes
 
 ## Install
 
@@ -84,6 +89,7 @@ $EDITOR ~/Library/Application\ Support/oterm/config.json
 Add the `d2` MCP server to your respective MCP Clients config:
 
 **Using Binary:**
+
 ```json
 {
     "mcpServers": {
@@ -96,6 +102,7 @@ Add the `d2` MCP server to your respective MCP Clients config:
 ```
 
 **Using Binary with file output:**
+
 ```json
 {
     "mcpServers": {
@@ -108,6 +115,7 @@ Add the `d2` MCP server to your respective MCP Clients config:
 ```
 
 **Using Docker:**
+
 ```json
 {
     "mcpServers": {
@@ -120,6 +128,7 @@ Add the `d2` MCP server to your respective MCP Clients config:
 ```
 
 **Using Docker with filesystem access:**
+
 ```json
 {
     "mcpServers": {
@@ -201,13 +210,13 @@ The cheat sheet highlights common shapes, layout tips, and ASCII-friendly patter
 
 ## ChatGPT Apps SDK mode
 
-- Start the server with the Apps UI assets and resources enabled:
+* Start the server with the Apps UI assets and resources enabled:
 
   ```bash
   go run . --transport http --port 8080 --enable-apps-sdk --image-type svg
   ```
 
-- Register the HTTP transport in your ChatGPT Apps SDK config (example):
+* Register the HTTP transport in your ChatGPT Apps SDK config (example):
 
   ```json
   {
@@ -222,13 +231,35 @@ The cheat sheet highlights common shapes, layout tips, and ASCII-friendly patter
   }
   ```
 
-- Use the new `render-d2-app` tool instead of `render-d2` when you want the HTML viewer. It returns:
-  - `structuredContent` with the D2 source plus base64 SVG/PNG/ASCII
-  - An embedded resource (`text/html+skybridge`) that ChatGPT renders inline via the registered `d2Viewer`.
+* Use the new `render-d2-app` tool instead of `render-d2` when you want the HTML viewer. It returns:
+  * `structuredContent` with the D2 source plus base64 SVG/PNG/ASCII
+  * An embedded resource (`text/html+skybridge`) that ChatGPT renders inline via the registered `d2Viewer`.
 
-- When `--enable-apps-sdk` is on, even `render-d2` routes through the interactive HTML viewer by default, so Apps clients always see the live preview.
-- The classic tools (`compile-d2`, `render-d2`, `fetch_d2_cheat_sheet`) remain available; Apps SDK behavior is gated by `--enable-apps-sdk`.
-- The bundled viewer attempts live client-side rendering via `@terrastruct/d2` from jsdelivr; if the CDN or WASM load fails, it gracefully falls back to the server-returned SVG/PNG/ASCII.
+* When `--enable-apps-sdk` is on, even `render_d2` routes through the interactive HTML viewer by default, so Apps clients always see the live preview.
+
+* The classic tools (`compile_d2`, `render_d2`, `fetch_d2_cheat_sheet`) remain available; Apps SDK behavior is gated by `--enable-apps-sdk`.
+
+* The bundled viewer attempts live client-side rendering via `@terrastruct/d2` from jsdelivr; if the CDN or WASM load fails, it gracefully falls back to the server-returned SVG/PNG/ASCII.
+
+### Download Workaround
+
+ChatGPT's sandboxed iframe blocks direct file downloads via blob URLs. To enable downloads:
+
+1. **HTTP transport required** - The server must run with `--transport http` to serve download endpoints
+
+2. **Download flow**:
+   * Widget calls `get_diagram_download_url` MCP tool with base64 diagram data
+   * Server creates temporary download (expires in 3 minutes)
+   * Widget uses `window.openai.openExternal()` to open the download URL
+   * User's browser handles the download normally
+
+3. **Available formats**: SVG and PNG (automatically generated for all diagrams)
+
+**Note**: Set `DOWNLOAD_BASE_URL` environment variable if your server is exposed via ngrok or similar:
+
+```bash
+DOWNLOAD_BASE_URL=https://<subdomain>.ngrok.app go run . --transport http --enable-apps-sdk
+```
 
 ### Expose to ChatGPT (ngrok)
 
@@ -249,25 +280,25 @@ https://<subdomain>.ngrok.app/mcp
 
 The server defaults to stdio transport for CLI-driven MCP clients. Switch transports per run:
 
-- `--transport stdio`: default for local CLI integrations.
-- `--transport sse`: legacy Server-Sent Events transport (alias: `--sse`).
-- `--transport http`: streamable HTTP transport; combine with `-p`/`--port` when running in Docker or containers.
+* `--transport stdio`: default for local CLI integrations.
+* `--transport sse`: legacy Server-Sent Events transport (alias: `--sse`).
+* `--transport http`: streamable HTTP transport; combine with `-p`/`--port` when running in Docker or containers.
 
 Environment overrides:
 
-- `MCP_TRANSPORT` sets the transport (`stdio`, `sse`, `http`) when flags are not provided.
-- `PORT` (or the legacy `SSE_PORT`) sets the listening port for SSE/HTTP transports.
-- `SSE_MODE=true` retains backwards compatibility by selecting the SSE transport.
+* `MCP_TRANSPORT` sets the transport (`stdio`, `sse`, `http`) when flags are not provided.
+* `PORT` (or the legacy `SSE_PORT`) sets the listening port for SSE/HTTP transports.
+* `SSE_MODE=true` retains backwards compatibility by selecting the SSE transport.
 
 ## Tool Reference
 
 | Tool | Description | Key Arguments |
 | ---- | ----------- | ------------- |
-| `compile-d2` | Validates D2 source and surfaces syntax errors. | `code` (string) or `file_path` (string) |
+| `compile_d2` | Validates D2 source and surfaces syntax errors. | `code` (string) or `file_path` (string) |
 | `render-d2` | Renders diagrams to PNG, SVG, or ASCII (ASCII is LLM-friendly). | `code`/`file_path`, `format` (`png`, `svg`, `ascii`), `ascii_mode` (`extended`, `standard`) |
-| `fetch_d2_cheat_sheet` | Returns a Markdown cheat sheet with examples and best practices. | _None_ |
+| `fetch_d2_cheat_sheet` | Returns a Markdown cheat sheet with examples and best practices. | *None* |
 
-Tip: Run `compile-d2` first to validate, then call `render-d2` with the same payload for the final output.
+Tip: Run `compile_d2` first to validate, then call `render-d2` with the same payload for the final output.
 
 ## Development
 

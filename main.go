@@ -38,9 +38,9 @@ func boolPtr(b bool) *bool {
 func registerServerTools(s *mcp.Server, formats []string) {
 	formatList := strings.Join(formats, ", ")
 
-	// compile-d2 tool
+	// compile_d2 tool
 	s.AddTool(&mcp.Tool{
-		Name:        "compile-d2",
+		Name:        "compile_d2",
 		Description: "Compile D2 code to validate and check for errors",
 		InputSchema: map[string]any{
 			"type": "object",
@@ -122,6 +122,32 @@ func registerServerTools(s *mcp.Server, formats []string) {
 			"properties": map[string]any{},
 		},
 	}, FetchD2CheatSheetHandler)
+
+	// get_diagram_download_url tool - for Apps SDK download workaround
+	if GlobalAppsSDKEnabled {
+		s.AddTool(&mcp.Tool{
+			Name:        "get_diagram_download_url",
+			Description: "Creates a temporary download URL for the diagram (expires in 60 seconds). Use with window.openai.openExternal() in the widget.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"data": map[string]any{
+						"type":        "string",
+						"description": "Base64-encoded diagram data (either this or file_path is required)",
+					},
+					"file_path": map[string]any{
+						"type":        "string",
+						"description": "Path to diagram file (either this or data is required)",
+					},
+					"format": map[string]any{
+						"type":        "string",
+						"description": "File format (svg, png)",
+						"enum":        []string{"svg", "png"},
+					},
+				},
+			},
+		}, GetDownloadURLHandler)
+	}
 }
 
 func detectPNGSupport() bool {
@@ -140,7 +166,7 @@ func main() {
 	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, http)")
 	sseFlag := flag.Bool("sse", false, "Enable SSE transport (deprecated, use --transport=http)")
 	port := flag.Int("port", 8080, "The port to run the server on")
-	imageType := flag.String("image-type", "png", "The output format to render (png, svg, ascii)")
+	imageType := flag.String("image-type", "svg", "The output format to render (png, svg, ascii)")
 	writeFiles := flag.Bool("write-files", false, "Write output files to disk when using file_path (default: return base64)")
 	asciiMode := flag.String("ascii-mode", "extended", "ASCII rendering mode when format is ascii (extended, standard)")
 	enableAppsSDK := flag.Bool("enable-apps-sdk", false, "Register ChatGPT Apps SDK resources and tools")
@@ -274,9 +300,23 @@ func main() {
 		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 			return s
 		}, nil)
+
+		// Start download cleanup worker if Apps SDK is enabled
+		if *enableAppsSDK {
+			downloads.StartCleanupWorker()
+			log.Println("[Download] Started cleanup worker for temporary downloads")
+		}
+
 		// Wrap with logging and path handling
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[HTTP] %s %s", r.Method, r.URL.Path)
+
+			// Handle download endpoint
+			if len(r.URL.Path) >= 10 && r.URL.Path[:10] == "/download/" {
+				ServeDownload(w, r)
+				return
+			}
+
 			// Strip /mcp prefix if present
 			if r.URL.Path == "/mcp" || r.URL.Path == "/mcp/" {
 				r.URL.Path = "/"
@@ -286,6 +326,9 @@ func main() {
 			mcpHandler.ServeHTTP(w, r)
 		})
 		log.Printf("Starting d2-mcp service (transport: http) on http://localhost%s/mcp ...", addr)
+		if *enableAppsSDK {
+			log.Printf("[Download] Download endpoint available at http://localhost%s/download/{{id}}", addr)
+		}
 		if err := http.ListenAndServe(addr, handler); err != nil {
 			log.Fatalf("Server error: %v\n", err)
 		}

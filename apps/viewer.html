@@ -53,12 +53,12 @@
         gap: 12px;
       }
 
-      /* Diagram container - separate card */
+      /* Diagram container - separate card (square) */
       #diagram-container {
         position: relative;
         width: 100%;
-        min-height: 320px;
-        max-height: 400px;
+        max-width: 600px;
+        aspect-ratio: 1 / 1;
         background: var(--color-bg-secondary);
         border: 1px solid var(--color-border-light);
         border-radius: 12px;
@@ -69,8 +69,6 @@
       #diagram {
         width: 100%;
         height: 100%;
-        min-height: 320px;
-        max-height: 400px;
         overflow: auto;
         padding: 16px;
         display: flex;
@@ -376,29 +374,24 @@
         font-weight: 500;
       }
 
-      /* Copy button in code preview */
-      .copy-btn {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        padding: 4px 8px;
-        border: 1px solid var(--color-border-medium);
-        border-radius: 4px;
-        background: var(--color-bg-primary);
-        color: var(--color-text-secondary);
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+      /* Loading spinner */
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
       }
 
-      .copy-btn:hover {
-        background: var(--color-interactive-hover);
-        color: var(--color-text-primary);
-      }
-
-      .copy-btn.copied {
-        color: #10a37f;
-        border-color: #10a37f;
+      .spinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--color-border-medium);
+        border-top-color: var(--color-text-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
       }
 
       /* Error state */
@@ -552,14 +545,15 @@
               <div class="dropdown-item" data-format="png">
                 <span>↓</span> Download PNG
               </div>
+              <div class="dropdown-item" data-format="source">
+                <span>↓</span> Download Source
+              </div>
             </div>
           </div>
         </div>
         <details>
           <summary>View source code</summary>
-          <pre id="code-preview" tabindex="0">
-            <button class="copy-btn" id="copy-code" aria-label="Copy code">Copy</button>
-          </pre>
+          <pre id="code-preview" tabindex="0"></pre>
         </details>
       </div>
     </main>
@@ -578,10 +572,8 @@
         // Check if we have actual diagram data
         if (data.code || data.svgBase64 || data.pngBase64 || data.ascii) {
           // Data is ready, initialize UI and render
-          const copyCodeBtn = document.querySelector("#copy-code");
           if (data.code) {
             codeEl.textContent = data.code;
-            codeEl.appendChild(copyCodeBtn);
           }
           render();
         } else {
@@ -604,14 +596,14 @@
         diagramContentEl.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
       }
 
-      // Zoom controls
+      // Zoom controls (generous zoom range for detailed diagrams)
       document.querySelector("#zoom-in").addEventListener("click", () => {
-        scale = Math.min(scale * 1.2, 5);
+        scale = Math.min(scale * 1.2, 20);
         updateTransform();
       });
 
       document.querySelector("#zoom-out").addEventListener("click", () => {
-        scale = Math.max(scale / 1.2, 0.5);
+        scale = Math.max(scale / 1.2, 0.1);
         updateTransform();
       });
 
@@ -647,11 +639,11 @@
       document.addEventListener("mouseleave", stopDragging);
       diagramEl.addEventListener("mouseleave", stopDragging);
 
-      // Zoom with mouse wheel
+      // Zoom with mouse wheel (generous zoom range for detailed diagrams)
       diagramEl.addEventListener("wheel", (e) => {
         e.preventDefault();
         const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        scale = Math.max(0.5, Math.min(5, scale * delta));
+        scale = Math.max(0.1, Math.min(20, scale * delta));
         updateTransform();
       });
 
@@ -815,47 +807,204 @@
 
       let currentFormat = "svg"; // Track current format (svg or png)
 
-      // Copy to clipboard helper
-      async function copyToClipboard(text, button) {
-        try {
-          await navigator.clipboard.writeText(text);
-          const originalText = button.textContent;
-          button.textContent = "✓ Copied!";
-          button.classList.add("copied");
-          setTimeout(() => {
-            button.textContent = originalText;
-            button.classList.remove("copied");
-          }, 2000);
-        } catch (err) {
-          console.error("Failed to copy:", err);
-          button.textContent = "✗ Failed";
-          setTimeout(() => {
-            button.textContent = originalText;
-          }, 2000);
+      // Loading state management
+      let isDownloading = false;
+      const originalButtonText = {};
+
+      function setDownloadLoading(loading) {
+        isDownloading = loading;
+        exportPrimaryBtn.disabled = loading;
+        exportDropdownToggle.disabled = loading;
+
+        if (loading) {
+          originalButtonText.label = exportLabel.textContent;
+          originalButtonText.icon = exportIcon.innerHTML;
+          exportIcon.innerHTML = '<span class="spinner"></span>';
+          exportLabel.textContent = "Creating link...";
+          exportPrimaryBtn.style.opacity = "0.7";
+          exportPrimaryBtn.style.cursor = "wait";
+        } else {
+          exportIcon.innerHTML = originalButtonText.icon || "&darr;";
+          exportLabel.textContent = originalButtonText.label || "Download";
+          exportPrimaryBtn.style.opacity = "1";
+          exportPrimaryBtn.style.cursor = "pointer";
         }
       }
 
-      // Export functions - compatible with iframe sandboxing
-      function downloadSVG() {
-        let svgData;
+      // Export functions using Apps SDK workaround
+      async function downloadSVG() {
+        if (isDownloading) return;
 
-        if (data.svgBase64) {
-          svgData = atob(data.svgBase64);
-        } else {
-          const svg = diagramContentEl.querySelector("svg");
-          if (!svg) return;
-          svgData = new XMLSerializer().serializeToString(svg);
+        try {
+          setDownloadLoading(true);
+
+          // Get SVG data
+          const svgData =
+            data.svgBase64 ||
+            (() => {
+              const svg = diagramContentEl.querySelector("svg");
+              if (!svg) return null;
+              return btoa(new XMLSerializer().serializeToString(svg));
+            })();
+
+          if (!svgData) {
+            alert("No diagram available to download");
+            return;
+          }
+
+          console.log("[Download] Calling get_diagram_download_url...");
+          console.log("[Download] SVG data length:", svgData.length);
+          console.log("[Download] window.openai available:", !!window.openai);
+          console.log(
+            "[Download] callTool available:",
+            !!window.openai?.callTool,
+          );
+
+          // Call MCP tool to create download URL with timeout (generous 2 minute timeout)
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Tool call timed out after 120s")),
+              120000,
+            ),
+          );
+
+          const toolCallPromise = window.openai.callTool(
+            "get_diagram_download_url",
+            {
+              data: svgData,
+              format: "svg",
+            },
+          );
+
+          console.log("[Download] Waiting for tool response...");
+
+          const result = await Promise.race([toolCallPromise, timeoutPromise]);
+
+          console.log("[Download] Tool result:", result);
+          console.log("[Download] Result type:", typeof result);
+          console.log("[Download] Result keys:", Object.keys(result || {}));
+
+          // Extract download URL from structured content
+          const downloadUrl =
+            result.structuredContent?.downloadUrl ||
+            result.content?.[0]?.text?.match(/https?:\/\/[^\s]+/)?.[0];
+
+          console.log("[Download] Extracted URL:", downloadUrl);
+
+          if (!downloadUrl) {
+            console.error("[Download] No URL in result:", result);
+            throw new Error(
+              "Failed to create download URL - no URL in response",
+            );
+          }
+
+          // Open in new tab/trigger download
+          console.log("[Download] Opening URL:", downloadUrl);
+          await window.openai.openExternal({
+            href: downloadUrl,
+          });
+          console.log("[Download] Download initiated successfully");
+        } catch (err) {
+          console.error("[Download] Error:", err);
+          alert(
+            "Download failed: " +
+              err.message +
+              ". Please right-click the diagram and select 'Save image as...'",
+          );
+        } finally {
+          setDownloadLoading(false);
+        }
+      }
+
+      async function downloadPNG() {
+        if (isDownloading) return;
+
+        try {
+          setDownloadLoading(true);
+
+          // Get PNG data
+          const pngData = data.pngBase64;
+          if (!pngData) {
+            alert("PNG format not available");
+            return;
+          }
+
+          console.log("[Download] Calling get_diagram_download_url...");
+          console.log("[Download] PNG data length:", pngData.length);
+
+          // Call MCP tool to create download URL with timeout (generous 2 minute timeout)
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Tool call timed out after 120s")),
+              120000,
+            ),
+          );
+
+          const toolCallPromise = window.openai.callTool(
+            "get_diagram_download_url",
+            {
+              data: pngData,
+              format: "png",
+            },
+          );
+
+          console.log("[Download] Waiting for tool response...");
+
+          const result = await Promise.race([toolCallPromise, timeoutPromise]);
+
+          console.log("[Download] Tool result:", result);
+          console.log("[Download] Result type:", typeof result);
+          console.log("[Download] Result keys:", Object.keys(result || {}));
+
+          // Extract download URL from structured content
+          const downloadUrl =
+            result.structuredContent?.downloadUrl ||
+            result.content?.[0]?.text?.match(/https?:\/\/[^\s]+/)?.[0];
+
+          console.log("[Download] Extracted URL:", downloadUrl);
+
+          if (!downloadUrl) {
+            console.error("[Download] No URL in result:", result);
+            throw new Error(
+              "Failed to create download URL - no URL in response",
+            );
+          }
+
+          // Open in new tab/trigger download
+          console.log("[Download] Opening URL:", downloadUrl);
+          await window.openai.openExternal({
+            href: downloadUrl,
+          });
+          console.log("[Download] Download initiated successfully");
+        } catch (err) {
+          console.error("[Download] Error:", err);
+          alert(
+            "Download failed: " +
+              err.message +
+              ". Please right-click the diagram and select 'Save image as...'",
+          );
+        } finally {
+          setDownloadLoading(false);
+        }
+      }
+
+      function downloadSource() {
+        if (!data.code) {
+          alert("No source code available");
+          return;
         }
 
         try {
-          const blob = new Blob([svgData], { type: "image/svg+xml" });
+          // Create blob with source code
+          const blob = new Blob([data.code], { type: "text/plain" });
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
           a.style.display = "none";
           a.href = url;
-          a.download = "diagram.svg";
+          a.download = data.sourceName
+            ? data.sourceName.replace(/\.d2$/, "") + ".d2"
+            : "diagram.d2";
 
-          // Append to DOM, click, then remove (required for some browsers in iframes)
           document.body.appendChild(a);
           a.click();
 
@@ -864,70 +1013,8 @@
             URL.revokeObjectURL(url);
           }, 100);
         } catch (err) {
-          console.error("Download failed:", err);
-          alert(
-            "Download not supported in this environment. Please copy the diagram manually.",
-          );
-        }
-      }
-
-      function downloadPNG() {
-        if (data.pngBase64) {
-          try {
-            const a = document.createElement("a");
-            a.style.display = "none";
-            a.href = "data:image/png;base64," + data.pngBase64;
-            a.download = "diagram.png";
-
-            document.body.appendChild(a);
-            a.click();
-
-            setTimeout(() => {
-              document.body.removeChild(a);
-            }, 100);
-          } catch (err) {
-            console.error("Download failed:", err);
-            alert("Download not supported in this environment.");
-          }
-        } else {
-          // Convert current SVG to PNG
-          const svg = diagramContentEl.querySelector("svg");
-          if (!svg) return;
-
-          try {
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            const img = new Image();
-
-            img.onload = () => {
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx.drawImage(img, 0, 0);
-
-              canvas.toBlob((blob) => {
-                if (!blob) return;
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.style.display = "none";
-                a.href = url;
-                a.download = "diagram.png";
-
-                document.body.appendChild(a);
-                a.click();
-
-                setTimeout(() => {
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                }, 100);
-              });
-            };
-
-            img.src = "data:image/svg+xml;base64," + btoa(svgData);
-          } catch (err) {
-            console.error("PNG conversion failed:", err);
-            alert("PNG export not supported in this environment.");
-          }
+          console.error("Source download failed:", err);
+          alert("Download failed. Please use the copy button instead.");
         }
       }
 
@@ -964,17 +1051,10 @@
         const format = item.dataset.format;
         if (format === "svg") downloadSVG();
         else if (format === "png") downloadPNG();
+        else if (format === "source") downloadSource();
 
         exportDropdown.classList.remove("show");
         exportDropdownToggle.setAttribute("aria-expanded", "false");
-      });
-
-      // Copy D2 code
-      copyCodeBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (data.code) {
-          copyToClipboard(data.code, copyCodeBtn);
-        }
       });
 
       // Show appropriate export button based on content

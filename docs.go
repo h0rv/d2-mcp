@@ -12,7 +12,7 @@ const serverInstructions = `Use the d2-mcp server to validate and render D2 diag
 
 Available tools:
 
-- compile-d2 — Validates D2 source code or a .d2 file path. Always run this before rendering large diagrams so you can surface syntax issues quickly.
+- compile_d2 — Validates D2 source code or a .d2 file path. Always run this before rendering large diagrams so you can surface syntax issues quickly.
 - render-d2 — Renders diagrams to PNG, SVG, or ASCII. You can override the format per call with the "format" argument and optionally set "ascii_mode" for ASCII output.
 - fetch_d2_cheat_sheet — Returns a Markdown quick reference with common shapes, styling tips, and example snippets for D2.
 
