@@ -76,8 +76,8 @@ func loadAppsViewerTemplate() (string, error) {
 	return html, nil
 }
 
-// appsToolMeta returns the OpenAI Apps SDK metadata for tools
-func appsToolMeta() mcp.Meta {
+// appsResourceMeta returns the OpenAI Apps SDK metadata for resources
+func appsResourceMeta() mcp.Meta {
 	return mcp.Meta{
 		"openai/outputTemplate":          appsResourceURI,
 		"openai/widgetAccessible":        true,
@@ -87,53 +87,6 @@ func appsToolMeta() mcp.Meta {
 	}
 }
 
-// registerAppsTools registers the Apps SDK tools with the server
-func registerAppsTools(s *mcp.Server, formats []string) {
-	formatList := strings.Join(formats, ", ")
-
-	// Build input schema
-	inputSchema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"code": map[string]any{
-				"type":        "string",
-				"description": "The D2 code to render (either this or file_path is required)",
-			},
-			"file_path": map[string]any{
-				"type":        "string",
-				"description": "Path to a D2 file to render (either this or code is required)",
-			},
-			"format": map[string]any{
-				"type":        "string",
-				"description": fmt.Sprintf("Optional output format override (%s)", formatList),
-				"enum":        formats,
-			},
-			"ascii_mode": map[string]any{
-				"type":        "string",
-				"description": "ASCII rendering mode when format=ascii (extended, standard)",
-				"enum":        []string{"extended", "standard"},
-			},
-		},
-	}
-
-	// Create the tool with Apps SDK metadata embedded in Meta field
-	tool := &mcp.Tool{
-		Meta:        appsToolMeta(),
-		Name:        "render_d2",
-		Title:       "Render D2 Diagram",
-		Description: "Renders a D2 diagram with interactive preview",
-		InputSchema: inputSchema,
-		Annotations: &mcp.ToolAnnotations{
-			Title:           "Render D2 Diagram",
-			ReadOnlyHint:    true,
-			DestructiveHint: boolPtr(false),
-			OpenWorldHint:   boolPtr(false),
-		},
-	}
-
-	s.AddTool(tool, RenderD2AppsHandler)
-}
-
 // registerAppsResources registers the Apps SDK resources with the server
 func registerAppsResources(s *mcp.Server) {
 	html, err := loadAppsViewerTemplate()
@@ -141,7 +94,7 @@ func registerAppsResources(s *mcp.Server) {
 		log.Fatalf("Failed to load Apps SDK viewer template: %v", err)
 	}
 
-	meta := appsToolMeta()
+	meta := appsResourceMeta()
 
 	// Register the resource
 	s.AddResource(&mcp.Resource{
@@ -184,9 +137,4 @@ func registerAppsResources(s *mcp.Server) {
 			},
 		}, nil
 	})
-}
-
-// boolPtr returns a pointer to a bool
-func boolPtr(b bool) *bool {
-	return &b
 }

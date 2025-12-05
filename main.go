@@ -30,6 +30,11 @@ func containsFormat(formats []string, target string) bool {
 	return false
 }
 
+// boolPtr returns a pointer to a bool
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 func registerServerTools(s *mcp.Server, formats []string) {
 	formatList := strings.Join(formats, ", ")
 
@@ -52,7 +57,7 @@ func registerServerTools(s *mcp.Server, formats []string) {
 		},
 	}, CompileD2Handler)
 
-	// render-d2 tool
+	// render_d2 tool - unified for both standard and Apps SDK modes
 	renderSchema := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -81,11 +86,32 @@ func registerServerTools(s *mcp.Server, formats []string) {
 		}
 	}
 
-	s.AddTool(&mcp.Tool{
-		Name:        "render-d2",
-		Description: fmt.Sprintf("Render a D2 diagram in %s format", formatList),
+	// Build the tool with conditional metadata
+	tool := &mcp.Tool{
+		Name:        "render_d2",
+		Description: "Renders a D2 diagram with interactive preview",
 		InputSchema: renderSchema,
-	}, RenderD2Handler)
+	}
+
+	// Add Apps SDK metadata if enabled
+	if GlobalAppsSDKEnabled {
+		tool.Meta = mcp.Meta{
+			"openai/outputTemplate":          appsResourceURI,
+			"openai/widgetAccessible":        true,
+			"openai/resultCanProduceWidget":  true,
+			"openai/toolInvocation/invoking": "Rendering diagram",
+			"openai/toolInvocation/invoked":  "Rendered diagram",
+		}
+		tool.Title = "Render D2 Diagram"
+		tool.Annotations = &mcp.ToolAnnotations{
+			Title:           "Render D2 Diagram",
+			ReadOnlyHint:    true,
+			DestructiveHint: boolPtr(false),
+			OpenWorldHint:   boolPtr(false),
+		}
+	}
+
+	s.AddTool(tool, RenderD2Handler)
 
 	// fetch_d2_cheat_sheet tool
 	s.AddTool(&mcp.Tool{
@@ -232,9 +258,8 @@ func main() {
 	// Register standard tools
 	registerServerTools(s, supportedFormats)
 
-	// Register Apps SDK tools and resources
+	// Register Apps SDK resources if enabled
 	if *enableAppsSDK {
-		registerAppsTools(s, supportedFormats)
 		registerAppsResources(s)
 	}
 

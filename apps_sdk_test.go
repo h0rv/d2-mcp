@@ -5,10 +5,10 @@ import (
 )
 
 func TestAppsToolMeta_Structure(t *testing.T) {
-	meta := appsToolMeta()
+	meta := appsResourceMeta()
 
 	if meta == nil {
-		t.Fatal("appsToolMeta returned nil")
+		t.Fatal("appsResourceMeta returned nil")
 	}
 
 	// Verify all expected fields are present
@@ -50,8 +50,8 @@ func TestLoadAppsViewerTemplate(t *testing.T) {
 		t.Error("expected non-empty HTML template")
 	}
 
-	// Check that it contains expected elements
-	if !contains(html, "<!DOCTYPE html>") {
+	// Check that it contains expected elements (case insensitive)
+	if !contains(html, "<!DOCTYPE html>") && !contains(html, "<!doctype html>") {
 		t.Error("HTML should contain DOCTYPE")
 	}
 

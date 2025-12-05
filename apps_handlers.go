@@ -86,12 +86,12 @@ func RenderD2AppsHandler(
 
 		payload.SVGBase64 = base64.StdEncoding.EncodeToString(svg)
 
-		if format == "png" {
-			png, err := SvgToPng(ctx, svg)
-			if err != nil {
-				return nil, err
-			}
+		// For Apps SDK widget, always generate PNG if available so users have both export options
+		png, err := SvgToPng(ctx, svg)
+		if err == nil {
 			payload.PNGBase64 = base64.StdEncoding.EncodeToString(png)
+		} else {
+			log.Printf("[Apps SDK] PNG generation failed (non-fatal): %v", err)
 		}
 	}
 

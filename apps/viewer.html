@@ -93,14 +93,14 @@
 
       #diagram svg {
         width: 100%;
-        max-height: 368px;
         height: auto;
+        max-width: 100%;
       }
 
       #diagram img {
         width: 100%;
-        max-height: 368px;
         height: auto;
+        max-width: 100%;
       }
 
       /* Zoom controls - minimal design */
@@ -148,22 +148,22 @@
         outline-offset: -2px;
       }
 
-      /* Content wrapper - separate card */
+      /* Content wrapper - separate card with elevated background */
       .content-wrapper {
         width: 100%;
-        background: var(--color-bg-primary);
+        background: var(--color-bg-secondary);
         border: 1px solid var(--color-border-light);
         border-radius: 12px;
         padding: 16px;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
       }
 
-      /* Settings panel - clean, minimal */
+      /* Settings panel - single line with export */
       .settings-panel {
         display: flex;
+        align-items: flex-end;
         gap: 12px;
-        padding: 0 0 16px 0;
-        border-bottom: 1px solid var(--color-border-light);
+        flex-wrap: wrap;
       }
 
       .setting-group {
@@ -212,10 +212,7 @@
       details {
         margin-top: 16px;
         margin-bottom: 0;
-      }
-
-      details[open] {
-        padding-bottom: 4px;
+        padding-bottom: 8px;
       }
 
       summary {
@@ -286,60 +283,97 @@
         line-height: 1.4;
       }
 
-      /* Action buttons */
-      .action-buttons {
+      /* Split button container */
+      .split-button {
         display: flex;
-        gap: 8px;
-        margin: 12px 0 0 0;
-        padding: 12px 0 0 0;
-        border-top: 1px solid var(--color-border-light);
+        position: relative;
+        margin-left: auto;
       }
 
-      .action-btn {
-        padding: 6px 12px;
-        border: 1px solid var(--color-border-medium);
-        border-radius: 6px;
-        background: var(--color-bg-primary);
-        color: var(--color-text-secondary);
+      .split-button-main {
+        padding: 6px 16px;
+        border: 1px solid var(--color-text-primary);
+        border-radius: 6px 0 0 6px;
+        background: var(--color-text-primary);
+        color: var(--color-bg-primary);
         font-size: 13px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
         transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
         display: flex;
         align-items: center;
         gap: 6px;
+        border-right: none;
       }
 
-      .action-btn:hover {
-        background: var(--color-interactive-hover);
-        color: var(--color-text-primary);
+      .split-button-main:hover {
+        background: var(--color-text-secondary);
         border-color: var(--color-text-secondary);
       }
 
-      .action-btn:active {
-        background: var(--color-interactive-active);
+      .split-button-toggle {
+        padding: 6px 8px;
+        border: 1px solid var(--color-text-primary);
+        border-radius: 0 6px 6px 0;
+        background: var(--color-text-primary);
+        color: var(--color-bg-primary);
+        font-size: 11px;
+        cursor: pointer;
+        transition: all 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-left: 1px solid rgba(255, 255, 255, 0.2);
       }
 
-      .action-btn:focus-visible {
+      .split-button-toggle:hover {
+        background: var(--color-text-secondary);
+        border-color: var(--color-text-secondary);
+      }
+
+      .split-button-toggle:focus-visible {
         outline: 2px solid var(--color-text-primary);
         outline-offset: 2px;
       }
 
-      .action-btn-primary {
-        background: var(--color-text-primary);
-        color: var(--color-bg-primary);
-        border-color: var(--color-text-primary);
-        font-weight: 600;
+      /* Dropdown menu */
+      .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border-light);
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        padding: 4px;
+        min-width: 160px;
+        z-index: 100;
+        display: none;
       }
 
-      .action-btn-primary:hover {
-        background: var(--color-text-secondary);
-        border-color: var(--color-text-secondary);
-        color: var(--color-bg-primary);
+      .dropdown-menu.show {
+        display: block;
       }
 
-      .action-btn-primary:active {
-        opacity: 0.8;
+      .dropdown-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 13px;
+        color: var(--color-text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: background 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .dropdown-item:hover {
+        background: var(--color-interactive-hover);
+      }
+
+      .dropdown-item.active {
+        background: var(--color-bg-secondary);
+        font-weight: 500;
       }
 
       /* Copy button in code preview */
@@ -405,6 +439,10 @@
         .zoom-controls {
           background: rgba(33, 33, 33, 0.96);
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .dropdown-menu {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .setting-group select {
@@ -490,39 +528,32 @@
               <option value="true">Sketch</option>
             </select>
           </div>
-        </div>
-        <div class="action-buttons" id="action-buttons" style="display: none">
-          <button
-            class="action-btn action-btn-primary"
-            id="export-primary"
-            aria-label="Export diagram"
-          >
-            <span>↓</span> <span id="export-label">Export</span>
-          </button>
-          <button
-            class="action-btn"
-            id="export-svg"
-            aria-label="Download SVG"
-            style="display: none"
-          >
-            <span>↓</span> SVG
-          </button>
-          <button
-            class="action-btn"
-            id="export-png"
-            aria-label="Download PNG"
-            style="display: none"
-          >
-            <span>↓</span> PNG
-          </button>
-          <button
-            class="action-btn"
-            id="copy-ascii"
-            aria-label="Copy ASCII"
-            style="display: none"
-          >
-            <span>📋</span> Copy ASCII
-          </button>
+          <div class="split-button" id="export-button" style="display: none">
+            <button
+              class="split-button-main"
+              id="export-primary"
+              aria-label="Export diagram"
+            >
+              <span id="export-icon">↓</span>
+              <span id="export-label">Download</span>
+            </button>
+            <button
+              class="split-button-toggle"
+              id="export-dropdown-toggle"
+              aria-label="Show export options"
+              aria-expanded="false"
+            >
+              ▼
+            </button>
+            <div class="dropdown-menu" id="export-dropdown">
+              <div class="dropdown-item" data-format="svg">
+                <span>↓</span> Download SVG
+              </div>
+              <div class="dropdown-item" data-format="png">
+                <span>↓</span> Download PNG
+              </div>
+            </div>
+          </div>
         </div>
         <details>
           <summary>View source code</summary>
@@ -538,15 +569,28 @@
       const diagramContentEl = document.querySelector("#diagram-content");
       const codeEl = document.querySelector("#code-preview");
 
-      // Get data from ChatGPT
-      const data = window.openai?.toolOutput ?? {};
+      let data = {};
 
-      // Display the source code
-      const copyCodeBtn = document.querySelector("#copy-code");
-      if (data.code) {
-        codeEl.textContent = data.code;
-        codeEl.appendChild(copyCodeBtn);
+      // Wait for data to be available before initializing
+      function init() {
+        data = window.openai?.toolOutput ?? {};
+
+        // Check if we have actual diagram data
+        if (data.code || data.svgBase64 || data.pngBase64 || data.ascii) {
+          // Data is ready, initialize UI and render
+          const copyCodeBtn = document.querySelector("#copy-code");
+          if (data.code) {
+            codeEl.textContent = data.code;
+            codeEl.appendChild(copyCodeBtn);
+          }
+          render();
+        } else {
+          // Data not ready yet, check again shortly
+          setTimeout(init, 100);
+        }
       }
+
+      init();
 
       // Zoom and pan state
       let scale = 1;
@@ -655,7 +699,7 @@
 
         const svg = await d2Instance.render(result.diagram, {
           ...result.renderOptions,
-          pad: 20,
+          pad: 10,
           center: true,
         });
 
@@ -682,11 +726,13 @@
         renderTimeout = setTimeout(async () => {
           try {
             await renderWithD2JS();
+            updateActionButtons();
           } catch (err) {
             console.error("Re-render failed:", err);
             diagramContentEl.style.opacity = "1";
             diagramContentEl.innerHTML =
               '<div class="error-msg">Rendering failed. Please try again.</div>';
+            updateActionButtons();
           }
         }, 150);
       }
@@ -734,6 +780,7 @@
         if (data.code && data.code.trim() !== "" && data.live !== false) {
           try {
             await renderWithD2JS();
+            updateActionButtons();
             return;
           } catch (err) {
             console.error("d2.js render failed:", err);
@@ -745,6 +792,7 @@
         // Try pre-rendered fallback
         if (renderFallback()) {
           diagramContentEl.style.opacity = "1";
+          updateActionButtons();
           return;
         }
 
@@ -752,19 +800,20 @@
         diagramContentEl.style.opacity = "1";
         diagramContentEl.innerHTML =
           '<div class="error-msg">No diagram data available</div>';
+        updateActionButtons();
       }
 
-      render();
-
       // Export and Copy functionality
-      const actionButtons = document.querySelector("#action-buttons");
+      const exportButton = document.querySelector("#export-button");
       const exportPrimaryBtn = document.querySelector("#export-primary");
       const exportLabel = document.querySelector("#export-label");
-      const exportSvgBtn = document.querySelector("#export-svg");
-      const exportPngBtn = document.querySelector("#export-png");
-      const copyAsciiBtn = document.querySelector("#copy-ascii");
+      const exportIcon = document.querySelector("#export-icon");
+      const exportDropdownToggle = document.querySelector(
+        "#export-dropdown-toggle",
+      );
+      const exportDropdown = document.querySelector("#export-dropdown");
 
-      let currentFormat = "svg"; // Track current format
+      let currentFormat = "svg"; // Track current format (svg or png)
 
       // Copy to clipboard helper
       async function copyToClipboard(text, button) {
@@ -786,15 +835,138 @@
         }
       }
 
-      // Primary export button - smart export based on format
-      exportPrimaryBtn.addEventListener("click", () => {
-        if (currentFormat === "ascii") {
-          copyAsciiBtn.click();
-        } else if (currentFormat === "png") {
-          exportPngBtn.click();
+      // Export functions - compatible with iframe sandboxing
+      function downloadSVG() {
+        let svgData;
+
+        if (data.svgBase64) {
+          svgData = atob(data.svgBase64);
         } else {
-          exportSvgBtn.click();
+          const svg = diagramContentEl.querySelector("svg");
+          if (!svg) return;
+          svgData = new XMLSerializer().serializeToString(svg);
         }
+
+        try {
+          const blob = new Blob([svgData], { type: "image/svg+xml" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.style.display = "none";
+          a.href = url;
+          a.download = "diagram.svg";
+
+          // Append to DOM, click, then remove (required for some browsers in iframes)
+          document.body.appendChild(a);
+          a.click();
+
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 100);
+        } catch (err) {
+          console.error("Download failed:", err);
+          alert(
+            "Download not supported in this environment. Please copy the diagram manually.",
+          );
+        }
+      }
+
+      function downloadPNG() {
+        if (data.pngBase64) {
+          try {
+            const a = document.createElement("a");
+            a.style.display = "none";
+            a.href = "data:image/png;base64," + data.pngBase64;
+            a.download = "diagram.png";
+
+            document.body.appendChild(a);
+            a.click();
+
+            setTimeout(() => {
+              document.body.removeChild(a);
+            }, 100);
+          } catch (err) {
+            console.error("Download failed:", err);
+            alert("Download not supported in this environment.");
+          }
+        } else {
+          // Convert current SVG to PNG
+          const svg = diagramContentEl.querySelector("svg");
+          if (!svg) return;
+
+          try {
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            const img = new Image();
+
+            img.onload = () => {
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
+
+              canvas.toBlob((blob) => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.style.display = "none";
+                a.href = url;
+                a.download = "diagram.png";
+
+                document.body.appendChild(a);
+                a.click();
+
+                setTimeout(() => {
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                }, 100);
+              });
+            };
+
+            img.src = "data:image/svg+xml;base64," + btoa(svgData);
+          } catch (err) {
+            console.error("PNG conversion failed:", err);
+            alert("PNG export not supported in this environment.");
+          }
+        }
+      }
+
+      // Primary export button handler
+      exportPrimaryBtn.addEventListener("click", () => {
+        if (currentFormat === "png") {
+          downloadPNG();
+        } else {
+          downloadSVG();
+        }
+      });
+
+      // Dropdown toggle
+      exportDropdownToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        exportDropdown.classList.toggle("show");
+        exportDropdownToggle.setAttribute(
+          "aria-expanded",
+          exportDropdown.classList.contains("show"),
+        );
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener("click", () => {
+        exportDropdown.classList.remove("show");
+        exportDropdownToggle.setAttribute("aria-expanded", "false");
+      });
+
+      // Dropdown item handlers
+      exportDropdown.addEventListener("click", (e) => {
+        const item = e.target.closest(".dropdown-item");
+        if (!item) return;
+
+        const format = item.dataset.format;
+        if (format === "svg") downloadSVG();
+        else if (format === "png") downloadPNG();
+
+        exportDropdown.classList.remove("show");
+        exportDropdownToggle.setAttribute("aria-expanded", "false");
       });
 
       // Copy D2 code
@@ -805,115 +977,39 @@
         }
       });
 
-      // Copy ASCII diagram
-      copyAsciiBtn.addEventListener("click", () => {
-        if (data.ascii) {
-          copyToClipboard(data.ascii, copyAsciiBtn);
-        }
-      });
-
-      // Download SVG
-      exportSvgBtn.addEventListener("click", () => {
-        if (data.svgBase64) {
-          try {
-            const svgText = atob(data.svgBase64);
-            const blob = new Blob([svgText], { type: "image/svg+xml" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "diagram.svg";
-            a.click();
-            URL.revokeObjectURL(url);
-          } catch (err) {
-            console.error("Failed to download SVG:", err);
-          }
-        } else {
-          // Export current rendered SVG
-          const svg = diagramContentEl.querySelector("svg");
-          if (svg) {
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const blob = new Blob([svgData], { type: "image/svg+xml" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "diagram.svg";
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        }
-      });
-
-      // Download PNG
-      exportPngBtn.addEventListener("click", () => {
-        if (data.pngBase64) {
-          const a = document.createElement("a");
-          a.href = "data:image/png;base64," + data.pngBase64;
-          a.download = "diagram.png";
-          a.click();
-        } else {
-          // Convert current SVG to PNG
-          const svg = diagramContentEl.querySelector("svg");
-          if (svg) {
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            const img = new Image();
-
-            img.onload = () => {
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx.drawImage(img, 0, 0);
-              canvas.toBlob((blob) => {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = "diagram.png";
-                a.click();
-                URL.revokeObjectURL(url);
-              });
-            };
-
-            img.src = "data:image/svg+xml;base64," + btoa(svgData);
-          }
-        }
-      });
-
-      // Show appropriate action buttons based on content
+      // Show appropriate export button based on content
       function updateActionButtons() {
         const hasSvg = data.svgBase64 || diagramContentEl.querySelector("svg");
         const hasPng = data.pngBase64;
-        const hasAscii = data.ascii;
 
-        if (hasSvg || hasPng || hasAscii) {
-          actionButtons.style.display = "flex";
+        if (hasSvg || hasPng) {
+          exportButton.style.display = "flex";
 
-          // Determine current format and update label
-          if (hasAscii) {
-            currentFormat = "ascii";
-            exportLabel.textContent = "Copy ASCII";
-            exportPrimaryBtn.querySelector("span:first-child").textContent =
-              "📋";
-          } else if (hasPng && !hasSvg) {
+          // Determine current format
+          if (hasPng && !hasSvg) {
             currentFormat = "png";
             exportLabel.textContent = "Download PNG";
-            exportPrimaryBtn.querySelector("span:first-child").textContent =
-              "↓";
           } else {
             currentFormat = "svg";
             exportLabel.textContent = "Download SVG";
-            exportPrimaryBtn.querySelector("span:first-child").textContent =
-              "↓";
           }
 
-          // Show secondary export options
-          exportSvgBtn.style.display = hasSvg ? "flex" : "none";
-          exportPngBtn.style.display = hasSvg || hasPng ? "flex" : "none";
-          copyAsciiBtn.style.display = hasAscii ? "flex" : "none";
+          // Update dropdown items - show both if available
+          const svgItem = exportDropdown.querySelector('[data-format="svg"]');
+          const pngItem = exportDropdown.querySelector('[data-format="png"]');
+
+          if (svgItem) {
+            svgItem.style.display = hasSvg ? "flex" : "none";
+            svgItem.classList.toggle("active", currentFormat === "svg");
+          }
+          if (pngItem) {
+            pngItem.style.display = hasPng ? "flex" : "none";
+            pngItem.classList.toggle("active", currentFormat === "png");
+          }
+        } else {
+          exportButton.style.display = "none";
         }
       }
-
-      // Update buttons after render
-      setTimeout(updateActionButtons, 100);
     </script>
   </body>
 </html>
