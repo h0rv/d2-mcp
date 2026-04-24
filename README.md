@@ -140,7 +140,22 @@ Add the `d2` MCP server to your respective MCP Clients config:
 
 ## Rendering Formats
 
-The server returns PNG output by default. Override globally when starting the binary:
+The server returns PNG output by default when `rsvg-convert` from librsvg is available. If `rsvg-convert` is missing, the server automatically removes `png` from the `render-d2` tool's `format` enum and falls back to SVG. The Docker image installs librsvg, so PNG works out of the box there.
+
+Install librsvg for local binaries:
+
+```bash
+# macOS
+brew install librsvg
+
+# Debian/Ubuntu
+sudo apt-get install librsvg2-bin
+
+# Alpine
+apk add librsvg
+```
+
+Override globally when starting the binary:
 
 ```bash
 ./d2-mcp --image-type svg        # SVG output

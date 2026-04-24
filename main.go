@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 
@@ -71,13 +70,8 @@ func buildServerTools(formats []string) []server.ServerTool {
 }
 
 func detectPNGSupport() bool {
-	if _, err := exec.LookPath("magick"); err == nil {
-		return true
-	}
-	if _, err := exec.LookPath("convert"); err == nil {
-		return true
-	}
-	return false
+	_, err := findSVGToPNGConverter()
+	return err == nil
 }
 
 func main() {
@@ -160,7 +154,7 @@ func main() {
 	// Determine supported formats based on environment/tool availability.
 	pngSupported := detectPNGSupport()
 	if !pngSupported {
-		log.Println("Warning: PNG rendering disabled; install ImageMagick ('magick' or 'convert') to enable it.")
+		log.Println("Warning: PNG rendering disabled; install librsvg ('rsvg-convert') to enable it.")
 	}
 
 	allFormats := []string{"png", "svg", "ascii"}

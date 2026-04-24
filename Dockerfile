@@ -12,7 +12,7 @@ RUN go build -o d2-mcp .
 
 FROM alpine:3.23
 
-RUN apk add --no-cache imagemagick librsvg
+RUN apk add --no-cache librsvg
 
 WORKDIR /app
 

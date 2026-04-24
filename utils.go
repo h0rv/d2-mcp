@@ -7,16 +7,35 @@ import (
 	"os/exec"
 )
 
+type svgToPNGConverter struct {
+	name string
+	path string
+	args func(inputPath, outputPath string) []string
+}
+
+func findSVGToPNGConverter() (*svgToPNGConverter, error) {
+	return findSVGToPNGConverterWithLookPath(exec.LookPath)
+}
+
+func findSVGToPNGConverterWithLookPath(lookPath func(string) (string, error)) (*svgToPNGConverter, error) {
+	path, err := lookPath("rsvg-convert")
+	if err != nil {
+		return nil, fmt.Errorf("PNG conversion requires librsvg's 'rsvg-convert' on PATH")
+	}
+
+	return &svgToPNGConverter{
+		name: "rsvg-convert",
+		path: path,
+		args: func(inputPath, outputPath string) []string {
+			return []string{"-f", "png", "-o", outputPath, inputPath}
+		},
+	}, nil
+}
+
 func SvgToPng(ctx context.Context, svg []byte) ([]byte, error) {
-	// Check which ImageMagick command is available
-	// ImageMagick v7 uses "magick", v6 uses "convert"
-	var magickCmd string
-	if _, err := exec.LookPath("magick"); err == nil {
-		magickCmd = "magick"
-	} else if _, err := exec.LookPath("convert"); err == nil {
-		magickCmd = "convert"
-	} else {
-		return nil, fmt.Errorf("ImageMagick not found: neither 'magick' nor 'convert' command available")
+	converter, err := findSVGToPNGConverter()
+	if err != nil {
+		return nil, err
 	}
 
 	// Create temporary files
@@ -39,14 +58,18 @@ func SvgToPng(ctx context.Context, svg []byte) ([]byte, error) {
 	if err = svgFile.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close temp SVG file: %w", err)
 	}
+	if err = pngFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close temp PNG file: %w", err)
+	}
 
-	// Convert SVG to PNG using ImageMagick
-	cmd := exec.CommandContext(ctx, magickCmd, svgFile.Name(), pngFile.Name())
+	// Use librsvg because ImageMagick does not reliably render D2's embedded
+	// WOFF fonts, which can turn labels into tofu squares in PNG output.
+	cmd := exec.CommandContext(ctx, converter.path, converter.args(svgFile.Name(), pngFile.Name())...)
 
 	// Capture both stdout and stderr for better error reporting
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("conversion failed: %w\nImageMagick output: %s", err, string(output))
+		return nil, fmt.Errorf("%s conversion failed: %w\noutput: %s", converter.name, err, string(output))
 	}
 
 	// Read the PNG file
