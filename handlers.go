@@ -111,7 +111,7 @@ func RenderD2Handler(
 	}
 
 	if _, ok := supportedFormatSet[format]; !ok {
-		return nil, fmt.Errorf("unsupported format: %s (supported: %s)", format, strings.Join(supportedFormats, ", "))
+		return mcp.NewToolResultError(fmt.Sprintf("unsupported format: %s (supported: %s)", format, strings.Join(supportedFormats, ", "))), nil
 	}
 
 	if format == "ascii" {
@@ -170,7 +170,7 @@ func RenderD2Handler(
 	if format == "png" {
 		png, err := SvgToPng(ctx, svg)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError("PNG rendering failed: " + err.Error()), nil
 		}
 		img = png
 		imgType = "image/png"

@@ -12,7 +12,13 @@ RUN go build -o d2-mcp .
 
 FROM alpine:3.23
 
-RUN apk add --no-cache librsvg
+# rsvg-convert rasterizes D2 SVGs to PNG. Fontconfig/DejaVu provide
+# fallback fonts when diagrams reference system fonts in addition to D2's
+# embedded WOFF fonts.
+RUN apk add --no-cache \
+    fontconfig \
+    librsvg \
+    ttf-dejavu
 
 WORKDIR /app
 

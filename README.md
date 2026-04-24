@@ -140,7 +140,7 @@ Add the `d2` MCP server to your respective MCP Clients config:
 
 ## Rendering Formats
 
-The server returns PNG output by default when `rsvg-convert` from librsvg is available. If `rsvg-convert` is missing, the server automatically removes `png` from the `render-d2` tool's `format` enum and falls back to SVG. The Docker image installs librsvg, so PNG works out of the box there.
+The server returns PNG output by default when `rsvg-convert` from librsvg is available. If `rsvg-convert` is missing, the server automatically removes `png` from the `render-d2` tool's `format` enum and falls back to SVG. The Docker image installs librsvg plus fontconfig/DejaVu fallback fonts, so PNG works out of the box there.
 
 Install librsvg for local binaries:
 
