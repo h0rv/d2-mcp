@@ -48,7 +48,7 @@ docker run --rm -i d2-mcp
 docker run --rm -i -v $(pwd):/data d2-mcp
 
 # Run in SSE mode (HTTP server)
-docker run --rm SSE_MODE=true -p 8080:8080 -e d2-mcp
+docker run --rm -e SSE_MODE=true -p 8080:8080 d2-mcp
 
 # Run in SSE mode with filesystem access
 docker run --rm -e SSE_MODE=true -p 8080:8080 -v $(pwd):/data d2-mcp
@@ -205,7 +205,7 @@ The server defaults to stdio transport for CLI-driven MCP clients. Switch transp
 
 - `--transport stdio`: default for local CLI integrations.
 - `--transport sse`: legacy Server-Sent Events transport (alias: `--sse`).
-- `--transport http`: streamable HTTP transport; combine with `-p`/`--port` when running in Docker or containers.
+- `--transport http`: streamable HTTP transport on `/mcp`; combine with `-p`/`--port` when running in Docker or containers.
 
 Environment overrides:
 

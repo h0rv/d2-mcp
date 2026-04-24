@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25.5-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY . .
 
 RUN go build -o d2-mcp .
 
-FROM alpine:3.22
+FROM alpine:3.23
 
 RUN apk add --no-cache imagemagick librsvg
 
