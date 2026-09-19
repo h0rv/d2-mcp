@@ -20,6 +20,7 @@ A Model Context Protocol (MCP) server for working with [D2: Declarative Diagramm
 ### Option 1: Install Binary Release
 
 ```bash
+# Download the appropriate d2-mcp binary from https://github.com/h0rv/d2-mcp/releases/latest and add it to your PATH
 ```
 
 ### Option 2: Install via `go`
