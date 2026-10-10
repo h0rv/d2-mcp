@@ -53,6 +53,8 @@ api -> database
 
 Useful light themes include 0 (neutral), 1 (gray), 3 (cool classics), and 6 (GrapeSoda). Theme IDs are validated against the bundled D2 catalog. TALA accepts `vars.d2-config.data.tala-seeds` within the nested `vars` map, with at most 16 seeds in this server.
 
+Variables must be literal scalars. Map/array variables, recursive substitutions, structural classes, and `${...}` interpolation inside block strings are unsupported. Use ordinary quoted/unquoted labels for scalar interpolation. The special `vars.d2-config` and `vars.d2-legend` maps remain supported. Classes and wildcard rules may set attributes; declare objects and connections explicitly. Indexed wildcard rules may style existing edges, but wildcard edge creation is unsupported.
+
 ## Markdown, code, and math
 
 ```d2
@@ -69,7 +71,7 @@ formula: |latex
 |
 ```
 
-PNG is native Go; no browser or converter is needed. D2 omits Markdown images. Native shapes work by default. For icons/images, the server must enable `--asset-dir` for relative local PNG/JPEG/GIF/SVG paths or `--allow-inline-assets` for base64 data URLs. Quote icon values, especially data URLs containing a semicolon. Assets are bounded and converted to embedded PNG; SVG uses a restricted importer, GIF uses its first frame. Network image URLs are never fetched. Links in SVG may use HTTP, HTTPS, mailto, or a fragment.
+PNG is native Go; no browser or converter is needed. Mathematical labels are limited to 4096 bytes each. D2 omits Markdown images. Native shapes work by default. For icons/images, the server must enable `--asset-dir` for relative local PNG/JPEG/GIF/SVG paths or `--allow-inline-assets` for base64 data URLs. Quote icon values, especially data URLs containing a semicolon. Assets are bounded and converted to embedded PNG; SVG uses a restricted importer, GIF uses its first frame. Network image URLs are never fetched. Links in SVG may use HTTP, HTTPS, mailto, or a fragment. Emitted SVG rejects active content, external resource references, and unsupported CSS functions, escapes, or comments.
 
 ## Sequence diagrams
 
@@ -107,6 +109,8 @@ ASCII `extended` uses Unicode box drawing; `standard` uses basic ASCII connector
 
 Multi-board source is supported; each call renders one board. Omit `board_path` to select the root, or pass kind/name pairs such as `["layers", "overview", "scenarios", "failure"]`. Scenario/step inheritance is preserved. Limits include 256 KiB combined source, 32 files, 32 boards including root, 1000 objects and 2000 connections across all boards, two simultaneous operations, and a cooperative timeout. Asset limits include 32 distinct images, 1 MiB each, 8 MiB combined input, 1024 pixels per side, and 8 million combined decoded pixels. Repeated SVG assets have an 8 MiB expansion budget. Reduce diagrams after `limit_exceeded`; retry `busy` errors later. Tool errors have `isError: true` plus a structured error code and located diagnostics when available.
 
-HTTP calls do not depend on prior sessions. Carry source/options explicitly. If an integrator configures the optional store, retain and pass `document_id` and `revision`; arbitrary tool metadata is not automatically round-tripped by clients. IDs only work with the same shared store and authorization policy.
+Source must be UTF-8 without NUL bytes. Pre-compilation limits include 16 combined map/dotted-key levels, 16 import levels, 10,000 projected AST operations, and 256 KiB of expanded scalar data. Every repeated import occurrence counts toward a separate 256 KiB expanded-source budget. Class/style/board combinations are conservatively estimated; flatten structural templates and reduce large combinations before retrying. These checks and cooperative deadlines do not provide process isolation.
+
+HTTP calls do not depend on prior sessions. Send one JSON-RPC object per POST; batches are rejected, including on legacy SSE. Carry source/options explicitly. If an integrator configures the optional store, retain and pass `document_id` and `revision`; arbitrary tool metadata is not automatically round-tripped by clients. IDs only work with the same shared store and authorization policy.
 
 More syntax: [D2 tour](https://d2lang.com/tour). Upstream: [d2lang/d2](https://github.com/d2lang/d2).

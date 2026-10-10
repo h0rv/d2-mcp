@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -79,7 +82,7 @@ func httpHandler(s *mcp.Server, transport string) http.Handler {
 	mux := http.NewServeMux()
 	getServer := func(*http.Request) *mcp.Server { return s }
 	if transport == "http" {
-		mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(getServer, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: maxRequestBytes}))
+		mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(getServer, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: true, MaxRequestBodyBytes: maxRequestBytes}))
 	} else {
 		legacy := mcp.NewSSEHandler(getServer, &mcp.SSEOptions{MaxRequestBodyBytes: maxRequestBytes})
 		mux.Handle("/sse", legacy)
@@ -99,6 +102,28 @@ func httpHandler(s *mcp.Server, transport string) http.Handler {
 			}
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		if r.Method == http.MethodPost && (r.URL.Path == "/mcp" || r.URL.Path == "/sse" || r.URL.Path == "/message") {
+			// A legacy batch can multiply a bounded input into thousands of
+			// buffered tool results. Admit one complete message on every version,
+			// including chunked bodies and the SDK's legacy SSE message endpoint.
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBytes))
+			_ = r.Body.Close()
+			if err != nil {
+				var tooLarge *http.MaxBytesError
+				status := http.StatusBadRequest
+				if errors.As(err, &tooLarge) {
+					status = http.StatusRequestEntityTooLarge
+				}
+				http.Error(w, "invalid or oversized MCP message", status)
+				return
+			}
+			body = bytes.TrimSpace(body)
+			if len(body) == 0 || body[0] != '{' || !json.Valid(body) {
+				http.Error(w, "send exactly one JSON-RPC object per request; batches are disabled", http.StatusBadRequest)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+		}
 		mux.ServeHTTP(w, r)
 	})
 }

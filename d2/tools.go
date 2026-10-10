@@ -23,6 +23,7 @@ import (
 	"github.com/d2lang/d2/d2renderers/d2ascii"
 	"github.com/d2lang/d2/d2renderers/d2ascii/asciishapes"
 	"github.com/d2lang/d2/d2renderers/d2ascii/charset"
+	"github.com/d2lang/d2/d2renderers/d2fonts"
 	"github.com/d2lang/d2/d2renderers/d2raster"
 	"github.com/d2lang/d2/d2renderers/d2scenebuild"
 	"github.com/d2lang/d2/d2renderers/d2svg"
@@ -122,6 +123,11 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 	if err := checkOptions(o); err != nil {
 		return nil, err
 	}
+	checkedFS, err := preflight(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	source.FS = checkedFS
 	graph, config, err := d2compiler.Compile(source.Path, strings.NewReader(source.Code), &d2compiler.CompileOptions{FS: source.FS})
 	if err != nil {
 		return nil, err
@@ -201,10 +207,46 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 	}
 	width := (float64(br.X) - float64(tl.X) + 2*float64(*render.Pad)) * scale
 	height := (float64(br.Y) - float64(tl.Y) + 2*float64(*render.Pad)) * scale
-	if width > maxDimension || height > maxDimension || width*height > maxPixels || width < 0 || height < 0 {
+	if diagram.Legend != nil {
+		// BoundingBox omits the legend. Match the renderer's text metrics and
+		// reserve full padding on each side (conservative at the far edge).
+		legendWidth, legendHeight := legendDimensions(diagram, ruler)
+		if legendWidth > 0 {
+			width = math.Max(width, (float64(br.X-tl.X+d2svg.LEGEND_CORNER_PADDING)+legendWidth+2*float64(*render.Pad))*scale)
+			height = math.Max(height, (legendHeight+2*float64(*render.Pad))*scale)
+		}
+	}
+	if math.IsNaN(width) || math.IsNaN(height) || width > maxDimension || height > maxDimension || width*height > maxPixels || width < 0 || height < 0 {
 		return nil, failure("limit_exceeded", "diagram exceeds 8192 pixels per side or 16 million pixels; reduce size, padding, or scale")
 	}
 	return &Prepared{diagram, render, *compile.Layout}, nil
+}
+
+func legendDimensions(diagram *d2target.Diagram, ruler *textmeasure.Ruler) (width, height float64) {
+	height = d2svg.LEGEND_PADDING + d2svg.LEGEND_FONT_SIZE + d2svg.LEGEND_ITEM_SPACING
+	measure := func(label, family string) {
+		if label == "" {
+			return
+		}
+		var font *d2fonts.FontFamily
+		if f, ok := d2fonts.D2_FONT_TO_FAMILY[family]; ok {
+			font = &f
+		}
+		dimensions := d2graph.GetTextDimensions(nil, ruler, &d2target.MText{Text: label, FontSize: d2svg.LEGEND_FONT_SIZE}, font)
+		width = math.Max(width, float64(dimensions.Width))
+		height += float64(max(dimensions.Height, d2svg.LEGEND_ICON_SIZE) + d2svg.LEGEND_ITEM_SPACING)
+	}
+	for _, shape := range diagram.Legend.Shapes {
+		measure(shape.Label, shape.FontFamily)
+	}
+	for _, edge := range diagram.Legend.Connections {
+		measure(edge.Label, edge.FontFamily)
+	}
+	if width > 0 {
+		width += 3*d2svg.LEGEND_PADDING + d2svg.LEGEND_ICON_SIZE
+		height += 2 * d2svg.LEGEND_PADDING
+	}
+	return width, height
 }
 
 // D2's GetBoard also accepts shorthand paths. Walk exact kind/name pairs here
@@ -258,6 +300,9 @@ func checkGraph(g *d2graph.Graph, assets *assetLoader) error {
 		}
 	}
 	check := func(a d2graph.Attributes) error {
+		if a.Language == "latex" && len(a.Label.Value) > 4096 {
+			return failure("limit_exceeded", "mathematical labels must be at most 4096 bytes")
+		}
 		if a.Icon != nil {
 			if _, err := assets.load(a.Icon); err != nil {
 				return err
@@ -266,11 +311,11 @@ func checkGraph(g *d2graph.Graph, assets *assetLoader) error {
 		if a.Link != nil && !SafeLink(a.Link.Value) {
 			return failure("unsupported_feature", "links must use http, https, mailto, or a fragment")
 		}
-		for _, dim := range []*d2graph.Scalar{a.WidthAttr, a.HeightAttr, a.Top, a.Left} {
+		for i, dim := range []*d2graph.Scalar{a.WidthAttr, a.HeightAttr, a.Top, a.Left} {
 			if dim != nil {
 				v, err := strconv.ParseFloat(dim.Value, 64)
-				if err != nil || math.Abs(v) > maxDimension {
-					return failure("limit_exceeded", "explicit dimensions and positions must be within 8192")
+				if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || math.Abs(v) > maxDimension || (i < 2 && v < 0) {
+					return failure("limit_exceeded", "dimensions must be between 0 and 8192; positions must be within ±8192")
 				}
 			}
 		}

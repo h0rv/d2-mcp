@@ -72,6 +72,8 @@ Connect a Streamable HTTP MCP client to `http://127.0.0.1:8080/mcp`. For example
 
 HTTP uses JSON responses, no session ID, and no background event stream. Every call carries its source/options; subsequent calls may go to another replica. GET/DELETE on `/mcp` return 405. Current MCP `2026-07-28` discovery and legacy initialization are handled by the SDK; integration tests cover `2025-03-26`, `2025-06-18`, `2025-11-25`, and `2026-07-28` over HTTP. Stdio and legacy SSE retain their supported initialization protocols.
 
+Send exactly one JSON-RPC object per HTTP POST. Batches are rejected on every protocol version, including legacy SSE message posts, to prevent unbounded aggregation of tool results. Disconnects cancel current-protocol (`2026-07-28`) work cooperatively; the SDK retains older protocol calls until their application deadline.
+
 Legacy SSE remains available at `/sse` with `--transport sse` (or `--sse`). Its SDK-managed connections are stateful and need a stable server connection. Prefer HTTP for new integrations. `MCP_TRANSPORT`, `PORT`, and legacy `SSE_MODE`/`SSE_PORT` are still accepted; explicit transport/port flags take precedence, and `--sse` selects SSE.
 
 HTTP binds to loopback by default, rejects cross-origin browser requests, and retains the SDK's localhost/DNS-rebinding protection. There is no built-in authentication or multi-user authorization. If exposing it beyond a trusted local environment, supply authentication, TLS, request limits, and process resource limits in your deployment. No public hosting is configured by this repository.
@@ -164,9 +166,13 @@ Multi-board source is accepted. Each render returns one artifact: root by defaul
 
 The server admits at most 256 KiB of combined source, 32 source files, 32 boards including root, 1000 objects and 2000 connections across all boards, two simultaneous diagram operations, and 16 MiB per returned artifact. Layout bounds are capped at 8192 pixels per side and 16 million pixels; native PNG additionally has explicit scene, raster, asset, and work budgets. MCP input frames/bodies are capped at 2 MiB. ASCII has a separate pre-allocation ceiling of 2000 cells per side and 1 million cells, independent of image scale; legends require SVG/PNG. Calls have a cooperative 30-second timeout (`--timeout`, at most 5m). Busy calls fail immediately and can be retried.
 
+Before compilation, UTF-8 source and imports pass conservative admission checks: at most 16 combined map/dotted-key levels, 16 import levels, 10,000 projected AST operations, and 256 KiB of expanded scalar data. Each import occurrence also counts toward a 256 KiB expanded-source budget. Imported files are frozen before compilation. Large style/class/board combinations can reach these estimates before reaching the object limit.
+
+Use literal scalar variables and explicit objects/connections. Map/array variables, recursive substitutions, structural classes, wildcard creation of objects or connections, and `${...}` interpolation inside block strings are unsupported. Attribute-only classes and style rules remain supported, including indexed styling of existing edges. Ordinary quoted/unquoted labels can use scalar variables; `vars.d2-config` and `vars.d2-legend` remain available. These restrictions deliberately exclude some valid upstream D2 programs; expand structural templates in the client before sending them. Mathematical labels are limited to 4096 bytes each.
+
 Timeouts are cooperative: parsing and some upstream work are not preemptible. These limits are useful bounds, not process isolation or a security audit. Run untrusted workloads with operating-system memory/CPU limits.
 
-Assets are disabled unless explicitly enabled by the server. Limits include 32 distinct images, 1 MiB each, 8 MiB combined input, 1024 pixels per side, and 8 million combined decoded pixels. Repeated SVG assets have a conservative 8 MiB expansion budget before rendering. Native shapes, text, Markdown labels, code, and mathematical labels remain available; D2 omits Markdown images. No rendering network access or ambient filesystem image loading is enabled. SVG links permit HTTP, HTTPS, mailto, and fragments; emitted SVG is checked for active content and external image references. TALA seed arrays are capped at 16.
+Assets are disabled unless explicitly enabled by the server. Limits include 32 distinct images, 1 MiB each, 8 MiB combined input, 1024 pixels per side, and 8 million combined decoded pixels. Repeated SVG assets have a conservative 8 MiB expansion budget before rendering. Native shapes, text, Markdown labels, code, and mathematical labels remain available; D2 omits Markdown images. No rendering network access or ambient filesystem image loading is enabled. SVG links permit HTTP, HTTPS, mailto, and fragments; emitted SVG is checked for active content and external resource references, including CSS contributed by mathematical labels. Unsupported CSS functions, escapes, and comments fail explicitly. PNG mathematics use finite SVG import budgets. TALA seed arrays are capped at 16.
 
 ## Optional document-store adapter
 
@@ -207,8 +213,9 @@ The image runs as a non-root user and includes the statically built Go server. F
 - D2 moved from `oss.terrastruct.com/d2` to `github.com/d2lang/d2`; Go 1.27.2 is required by this build. MCP moved from mark3labs to the official Go SDK.
 - Rendering now uses D2 defaults. For the old appearance request `layout: "dagre"`, `theme_id: 6`, `sketch: true`, `padding: 5`. Native PNG may differ in rasterization from librsvg.
 - PNG is always available without an external converter. SVG content changes from an MCP image to an embedded resource containing the original XML.
-- Both source arguments together are now an error. File input requires `--input-dir`; automatic file output also requires `--output-dir`. Arbitrary absolute paths remain disallowed; replacement requires both server and request opt-ins.
+- Both source arguments together are now an error. File input requires `--input-dir`; automatic file output also requires `--output-dir`. Arbitrary absolute input paths are now disallowed; replacement requires both server and request opt-ins.
 - HTTP is stateless and binds loopback; specify `--host 0.0.0.0` for container networking. Legacy SSE still requires a continuous connection and uses the message URL supplied by the SDK.
+- Send one JSON-RPC object per HTTP POST; legacy batches are rejected. Compilation uses the bounded subset above, so deeply nested or structurally generated diagrams may need to be flattened by the client.
 - Local/inline images are preserved through explicit asset opt-ins and normalized embedding; network references are rejected. Multi-board sources retain root output by default and gain exact board selection. See the [verified compatibility matrix](docs/compatibility.md) for 1.2.0 behavior and migration examples.
 
 ### Appearance comparison

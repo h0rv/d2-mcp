@@ -258,5 +258,14 @@ func rasterAssets() (*d2scenebuild.AssetOptions, error) {
 		MaxDecodedWidth: MaxAssetDimension, MaxDecodedHeight: MaxAssetDimension, MaxDecodedPixels: 1 << 20,
 		MaxAssets: 32, MaxCumulativeEncodedBytes: 32 << 20, MaxCumulativeDecodedBytes: 32 << 20,
 	}})
-	return &d2scenebuild.AssetOptions{Resolver: resolver}, err
+	return &d2scenebuild.AssetOptions{Resolver: resolver,
+		SVGImportLimits: d2svgimport.Limits{
+			MaxBytes: 1 << 20, MaxDepth: 64, MaxElements: 10000, MaxAttributes: 20000, MaxAttributeBytes: 1 << 20,
+			MaxPathCommands: 100000, MaxTransformFunctions: 10000, MaxUseDepth: 32, MaxResources: 10000,
+		},
+		SVGImportBudget: d2scenebuild.SVGImportBudget{
+			MaxSourceBytes: 8 << 20, MaxElements: 100000, MaxAttributes: 100000, MaxAttributeBytes: 8 << 20,
+			MaxPathCommands: 1000000, MaxTransformFunctions: 100000, MaxDeclaredResources: 100000, MaxExpandedUseInstances: 100000,
+		},
+	}, err
 }

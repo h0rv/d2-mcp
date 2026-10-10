@@ -235,7 +235,7 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 		if err != nil {
 			return errorResult("write_failed", err), nil
 		}
-		meta.URI = (&url.URL{Scheme: "file", Path: filepath.ToSlash(meta.Path)}).String()
+		meta.URI = artifactFileURI(filepath.ToSlash(meta.Path))
 		content = []mcp.Content{&mcp.TextContent{Text: "D2 diagram rendered to: " + meta.Path}, &mcp.ResourceLink{URI: meta.URI, Name: filepath.Base(meta.Path), MIMEType: mime, Size: ptr(int64(len(data)))}}
 	} else {
 		switch format {
@@ -267,6 +267,8 @@ func FetchD2CheatSheetHandler(_ context.Context, _ *mcp.CallToolRequest) (*mcp.C
 // in the emitted artifact, including links originating in Markdown labels.
 func checkSVG(data []byte) error {
 	decoder := xml.NewDecoder(bytes.NewReader(data))
+	styleDepth := 0
+	var stylesheet strings.Builder
 	for {
 		token, err := decoder.Token()
 		if err == io.EOF {
@@ -275,12 +277,33 @@ func checkSVG(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("invalid SVG: %w", err)
 		}
+		switch node := token.(type) {
+		case xml.ProcInst:
+			if node.Target != "xml" {
+				return errors.New("SVG processing instructions are disabled")
+			}
+		case xml.CharData:
+			if styleDepth > 0 {
+				stylesheet.Write(node)
+			}
+		case xml.EndElement:
+			if node.Name.Local == "style" {
+				styleDepth--
+				if err := checkCSS(stylesheet.String(), true); err != nil {
+					return err
+				}
+				stylesheet.Reset()
+			}
+		}
 		element, ok := token.(xml.StartElement)
 		if !ok {
 			continue
 		}
-		if element.Name.Local == "script" || element.Name.Local == "foreignObject" {
+		if element.Name.Local == "script" || element.Name.Local == "foreignObject" || element.Name.Local == "set" || strings.HasPrefix(element.Name.Local, "animate") {
 			return errors.New("active SVG content is disabled")
+		}
+		if element.Name.Local == "style" {
+			styleDepth++
 		}
 		for _, attr := range element.Attr {
 			if strings.HasPrefix(strings.ToLower(attr.Name.Local), "on") {
@@ -289,8 +312,32 @@ func checkSVG(data []byte) error {
 			if attr.Name.Local == "href" && !strings.HasPrefix(attr.Value, "#") && !(element.Name.Local == "a" && d2.SafeLink(attr.Value)) && !(element.Name.Local == "image" && safeEmbeddedPNG(attr.Value)) {
 				return errors.New("external SVG resources and unsafe links are disabled")
 			}
+			switch strings.ToLower(attr.Name.Local) {
+			case "style", "fill", "stroke", "filter", "mask", "clip-path", "cursor", "marker", "marker-start", "marker-mid", "marker-end":
+				if err := checkCSS(attr.Value, false); err != nil {
+					return err
+				}
+			}
 		}
 	}
+}
+
+// Input is an absolute native path after filepath.ToSlash. Keep Windows drive
+// letters in the URI path, and UNC server names in the authority.
+func artifactFileURI(path string) string {
+	if strings.HasPrefix(path, "//?/UNC/") {
+		path = "//" + strings.TrimPrefix(path, "//?/UNC/")
+	} else if strings.HasPrefix(path, "//?/") {
+		path = strings.TrimPrefix(path, "//?/")
+	}
+	if strings.HasPrefix(path, "//") {
+		host, rest, _ := strings.Cut(strings.TrimPrefix(path, "//"), "/")
+		return (&url.URL{Scheme: "file", Host: host, Path: "/" + rest}).String()
+	}
+	if len(path) >= 3 && path[1] == ':' && path[2] == '/' {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 
 func ptr[T any](v T) *T { return &v }

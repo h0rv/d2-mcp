@@ -18,6 +18,28 @@ editor or storage service is added.
 | SVG MCP result | Text plus base64 `image/svg+xml` image content | Embedded text resource with original SVG XML. PNG remains image content, ASCII remains text. File output returns the server-local artifact path/link; omit it for an inline result. |
 | Appearance | Dagre, GrapeSoda, sketch, padding 5 | D2 defaults. Restore settings with `layout: "dagre"`, `theme_id: 6`, `sketch: true`, `padding: 5`; native PNG rasterization may differ. |
 
+Compilation now admits a deliberately bounded subset of upstream D2. Source must
+be UTF-8 without NUL bytes. Combined map/dotted-key depth and import-chain depth
+are capped at 16. Admission estimates at most 10,000 AST operations and 256 KiB of
+expanded scalar data across imports, classes, style rules, and boards; repeated
+import occurrences also count toward a 256 KiB expanded-source budget. Imports
+are frozen before either compiler pass. These conservative checks may reject
+diagrams below the graph object limit.
+
+Literal scalar variables, attribute-only classes, and attribute-only wildcard
+rules remain supported. Map/array or recursively substituted variables,
+structural classes, wildcard creation of objects/connections, and `${...}`
+interpolation in block strings are unsupported. Expand those constructs in the
+client and send explicit source. Indexed wildcard styling of existing edges,
+ordinary scalar interpolation, `vars.d2-config`, and `vars.d2-legend` remain
+available. Mathematical labels are limited to 4096 bytes; ordinary mathematics
+render in both SVG and native PNG. SVG rejects unsupported CSS functions,
+escapes, comments, and external resource references.
+
+HTTP POSTs accept one JSON-RPC object, including on legacy SSE; batches now fail
+with HTTP 400. Current-protocol disconnects cancel work cooperatively. Older
+protocol calls retain their application deadline because of SDK behavior.
+
 For a trusted local project:
 
 ```sh

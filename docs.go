@@ -19,8 +19,11 @@ const serverInstructions = `Validate and render complete D2 diagrams with D2 0.9
 - File access is opt-in. Output writes require an output directory; overwrite needs explicit server and call opt-ins.
 - Select a board with board_path pairs, e.g. ["layers", "overview"]. Omitted means root; each call returns one board.
 - Image assets need --asset-dir or --allow-inline-assets; network image fetching is disabled. Use native shapes by default.
+- Use literal scalar variables, attribute-only classes/style rules, and explicit objects/connections. Structural templates and block-string interpolation are unsupported.
+- Source admission bounds combined nesting/import depth to 16, projected AST work to 10000, and expanded source/scalars to 256 KiB. Math labels are limited to 4096 bytes.
 - Errors are tool results with isError, readable text, and structured diagnostics when available.
 - HTTP is stateless: resend complete source/options. There is no default document storage.
+- Send one JSON-RPC object per HTTP POST; batches are rejected on all protocol versions.
 - If a deployment configures a document-store adapter, explicitly retain document_id/revision
   from store-d2 and pass both on later calls. Result metadata is not automatically round-tripped.
 `
