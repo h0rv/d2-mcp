@@ -149,6 +149,18 @@ class InstallerTests(unittest.TestCase):
                 installer.install("1.2.0", self.directory, expected_digest=DIGEST)
         self.assertFalse((self.directory / "d2-mcp").exists())
         self.assert_clean()
+
+        class InterruptedDownload(io.BytesIO):
+            def read(self, amount):
+                if self.tell():
+                    raise urllib.error.URLError("connection lost")
+                return super().read(4)
+
+        with mock.patch.object(installer, "open_url", return_value=InterruptedDownload(PAYLOAD)):
+            with self.assertRaises(urllib.error.URLError):
+                installer.install("1.2.0", self.directory, expected_digest=DIGEST)
+        self.assertFalse((self.directory / "d2-mcp").exists())
+        self.assert_clean()
         with mock.patch.object(installer, "MAX_BINARY_SIZE", len(PAYLOAD) - 1), self.network():
             with self.assertRaises(installer.InstallError):
                 installer.install("1.2.0", self.directory, expected_digest=DIGEST)
