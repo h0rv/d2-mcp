@@ -1,0 +1,26 @@
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+
+ ⛅️ wrangler 4.149.0
+────────────────────
+├ Building your Worker
+│ Worker Built! 🎉
+│
+├ Analysing
+│ Startup phase analysed
+│
+│ Bundle: 54761.53 KiB / gzip: 14212.03 KiB
+│
+│ Local startup profile:
+│   Profile window: 22.3 ms
+│   Sampled time: 1.6 ms
+│   Active: 0.0 ms (including 0.0 ms garbage collection)
+│   Idle: 1.6 ms
+│   Samples: 1
+│
+│ CPU Profile has been written to build/startup.cpuprofile. Load it into the Chrome DevTools profiler (or directly in VSCode) to view a flamegraph.
+│
+│ Note that the CPU Profile was measured on your Worker running locally on your machine, which has a different CPU than when your Worker runs on Cloudflare.
+│
+│ As such, CPU Profile can be used to understand where time is spent at startup, but the overall startup time in the profile should not be expected to exactly match what your Worker's startup time will be when deploying to Cloudflare.

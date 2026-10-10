@@ -1,0 +1,391 @@
+{
+  "node": "v24.19.0",
+  "localOnly": true,
+  "mode": "do",
+  "cases": [
+    {
+      "name": "dagre-cold",
+      "status": 200,
+      "wallMs": 1041.610606,
+      "bytes": 6873,
+      "goMemory": {
+        "heapAlloc": 7989992,
+        "heapSys": 12124160,
+        "numGC": 6,
+        "sys": 15597568
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 40894464
+      },
+      "localSampledCPU": {
+        "activeMs": 1010.3060000000006,
+        "idleMs": 5.368,
+        "gcMs": 2.192,
+        "samples": 481
+      },
+      "inspectorHeap": {
+        "usedSize": 1627680,
+        "totalSize": 3952640,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 102
+      }
+    },
+    {
+      "name": "dagre-warm",
+      "status": 200,
+      "wallMs": 36.93613899999991,
+      "bytes": 6873,
+      "goMemory": {
+        "heapAlloc": 9388192,
+        "heapSys": 12156928,
+        "numGC": 6,
+        "sys": 15859712
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 40894464
+      },
+      "localSampledCPU": {
+        "activeMs": 25.985000000000003,
+        "idleMs": 3.52,
+        "gcMs": 0,
+        "samples": 19
+      },
+      "inspectorHeap": {
+        "usedSize": 1680828,
+        "totalSize": 4214784,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 99
+      }
+    },
+    {
+      "name": "elk-warm",
+      "status": 200,
+      "wallMs": 167.8330219999998,
+      "bytes": 6844,
+      "goMemory": {
+        "heapAlloc": 10955688,
+        "heapSys": 13139968,
+        "numGC": 6,
+        "sys": 16908288
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 41943040
+      },
+      "localSampledCPU": {
+        "activeMs": 130.13500000000002,
+        "idleMs": 12.302,
+        "gcMs": 0,
+        "samples": 88
+      },
+      "inspectorHeap": {
+        "usedSize": 1729072,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 194
+      }
+    },
+    {
+      "name": "tala-warm",
+      "status": 200,
+      "wallMs": 649.899613,
+      "bytes": 6827,
+      "goMemory": {
+        "heapAlloc": 11593880,
+        "heapSys": 14417920,
+        "numGC": 8,
+        "sys": 18219008
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 43515904
+      },
+      "localSampledCPU": {
+        "activeMs": 623.1820000000006,
+        "idleMs": 6.548,
+        "gcMs": 0,
+        "samples": 442
+      },
+      "inspectorHeap": {
+        "usedSize": 1970760,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 97
+      }
+    },
+    {
+      "name": "durable-object",
+      "status": 200,
+      "wallMs": 21.708028999999897,
+      "bytes": 6873,
+      "goMemory": {
+        "heapAlloc": 9510040,
+        "heapSys": 14450688,
+        "numGC": 8,
+        "sys": 18219008
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 43515904
+      },
+      "localSampledCPU": {
+        "activeMs": 14.846000000000002,
+        "idleMs": 4.878,
+        "gcMs": 0,
+        "samples": 10
+      },
+      "inspectorHeap": {
+        "usedSize": 2018708,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 213
+      }
+    },
+    {
+      "name": "invalid-source",
+      "status": 422,
+      "wallMs": 6.412850000000162,
+      "error": "input.d2:1:4: maps must be terminated with }",
+      "goMemory": {
+        "heapAlloc": 9533728,
+        "heapSys": 14483456,
+        "numGC": 8,
+        "sys": 18219008
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 43515904
+      },
+      "localSampledCPU": {
+        "activeMs": 4.575,
+        "idleMs": 4.798,
+        "gcMs": 0,
+        "samples": 4
+      },
+      "inspectorHeap": {
+        "usedSize": 2037328,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 290
+      }
+    },
+    {
+      "name": "25-nodes",
+      "status": 200,
+      "wallMs": 53.33429699999988,
+      "bytes": 18427,
+      "goMemory": {
+        "heapAlloc": 13503448,
+        "heapSys": 15433728,
+        "numGC": 8,
+        "sys": 19267584
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 44564480
+      },
+      "localSampledCPU": {
+        "activeMs": 44.509999999999984,
+        "idleMs": 4.065,
+        "gcMs": 0,
+        "samples": 36
+      },
+      "inspectorHeap": {
+        "usedSize": 2149960,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 603
+      }
+    },
+    {
+      "name": "100-nodes-grid",
+      "status": 200,
+      "wallMs": 62.03226700000005,
+      "bytes": 33968,
+      "goMemory": {
+        "heapAlloc": 10947960,
+        "heapSys": 15532032,
+        "numGC": 9,
+        "sys": 19529728
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 44564480
+      },
+      "localSampledCPU": {
+        "activeMs": 56.324000000000005,
+        "idleMs": 4.413,
+        "gcMs": 0,
+        "samples": 32
+      },
+      "inspectorHeap": {
+        "usedSize": 2363452,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 1161
+      }
+    },
+    {
+      "name": "native-png",
+      "status": 200,
+      "wallMs": 186.1165060000003,
+      "bytes": 11290,
+      "goMemory": {
+        "heapAlloc": 15486024,
+        "heapSys": 17563648,
+        "numGC": 9,
+        "sys": 21889024
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 46923776
+      },
+      "localSampledCPU": {
+        "activeMs": 182.60999999999999,
+        "idleMs": 4.544,
+        "gcMs": 0,
+        "samples": 117
+      },
+      "inspectorHeap": {
+        "usedSize": 2478716,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 1275
+      }
+    },
+    {
+      "name": "durable-object-warm",
+      "status": 200,
+      "wallMs": 24.029317999999876,
+      "bytes": 6873,
+      "goMemory": {
+        "heapAlloc": 11528272,
+        "heapSys": 17661952,
+        "numGC": 10,
+        "sys": 21889024
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 46923776
+      },
+      "localSampledCPU": {
+        "activeMs": 17.925,
+        "idleMs": 5.551,
+        "gcMs": 0,
+        "samples": 12
+      },
+      "inspectorHeap": {
+        "usedSize": 2526408,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 1396
+      }
+    },
+    {
+      "name": "dagre-repeat-1",
+      "status": 200,
+      "wallMs": 18.904023000000052,
+      "bytes": 6873,
+      "goMemory": {
+        "heapAlloc": 12992880,
+        "heapSys": 17661952,
+        "numGC": 10,
+        "sys": 21889024
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 46923776
+      },
+      "localSampledCPU": {
+        "activeMs": 16.666,
+        "idleMs": 4.737,
+        "gcMs": 0,
+        "samples": 11
+      },
+      "inspectorHeap": {
+        "usedSize": 2573164,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 1499
+      }
+    },
+    {
+      "name": "dagre-repeat-2",
+      "status": 200,
+      "wallMs": 12.462516999999934,
+      "bytes": 6873,
+      "goMemory": {
+        "heapAlloc": 14449168,
+        "heapSys": 17661952,
+        "numGC": 10,
+        "sys": 21889024
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 46923776
+      },
+      "localSampledCPU": {
+        "activeMs": 11.199,
+        "idleMs": 4.367,
+        "gcMs": 0,
+        "samples": 10
+      },
+      "inspectorHeap": {
+        "usedSize": 2623024,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 1602
+      }
+    },
+    {
+      "name": "dagre-repeat-3",
+      "status": 200,
+      "wallMs": 22.031293000000005,
+      "bytes": 6873,
+      "goMemory": {
+        "heapAlloc": 15905456,
+        "heapSys": 18186240,
+        "numGC": 10,
+        "sys": 22413312
+      },
+      "runtime": {
+        "kind": "durable-object",
+        "initialWasmMemoryBytes": 25952256,
+        "wasmMemoryBytes": 47710208
+      },
+      "localSampledCPU": {
+        "activeMs": 14.810999999999996,
+        "idleMs": 6.147,
+        "gcMs": 0,
+        "samples": 11
+      },
+      "inspectorHeap": {
+        "usedSize": 2669804,
+        "totalSize": 4739072,
+        "embedderHeapUsedSize": 515872,
+        "backingStorageSize": 1705
+      }
+    }
+  ],
+  "readyWallMs": 1297.191144,
+  "initialHeap": {
+    "usedSize": 428800,
+    "totalSize": 786432,
+    "embedderHeapUsedSize": 515872,
+    "backingStorageSize": 0
+  }
+}

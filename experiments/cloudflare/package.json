@@ -1,0 +1,14 @@
+{
+  "name": "d2-cloudflare-local-probe",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash build.sh",
+    "test": "node probe.mjs && node probe.mjs do",
+    "profile": "bash profile.sh"
+  },
+  "devDependencies": {
+    "miniflare": "5.20261006.1-alpha",
+    "wrangler": "4.149.0"
+  }
+}
