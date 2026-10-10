@@ -19,6 +19,7 @@ not a security audit. The PR records the final commit and its CI result.
 | P3 | Windows drive paths produced an incorrect artifact file URI. | Serialize drive, UNC, and extended native paths correctly. Unit tests cover their URI representation; Windows runtime file operations were not exercised locally. |
 | P3 | Generated Codex TOML retained literal DEL characters and could be invalid. | Escape DEL while preserving non-BMP Unicode. Parser round trips cover controls, quotes, Unicode paths, and arguments. |
 | P3 | Endpoint validation accepted malformed hostnames that clients rejected or interpreted differently. | Require conservative ASCII/punycode DNS or canonical IP addresses. Tests cover invalid hosts, supported Unicode URL paths, loopback, and IPv6. |
+| P2 | Cancellation cleanup of a newly created output could delete another request's successful replacement. | All writes stage privately. New names publish with an exclusive hard link; replacements rename the completed file. Cleanup removes only the temporary name. The same deterministic interleaving failed before the fix and passes afterward under the race detector. |
 
 ## Regression coverage
 
@@ -42,6 +43,26 @@ platforms were checked. Fresh Claude and Pi fixture installs loaded the package
 and connected to MCP; the PR records the subsequent GitHub delivery check.
 The new packages explicitly select stdio despite ambient transport variables.
 
+A further independent runtime and installation review checked cancellation
+between compiler, asset, render, and write stages; operation-slot retention while
+uninterruptible work finishes; and preserving a completed backend revision when
+cancellation races the return. Regressions are in `cancellation_test.go` and
+`d2/cancellation_test.go`. The review found the output-cleanup race above and
+independently verified the fix. Exclusive output now requires a filesystem with
+hard-link support; there is no unsafe fallback.
+
+CI now runs the Go suite natively on Linux, macOS, and Windows and installs each
+runner's matching release-style binary outside the checkout. The smoke checks
+version stamping, checksum rejection, Unicode file URIs, imports and path
+boundaries, replacement, PNG/ELK, and ASCII/TALA. Only the download boundary uses
+a fixture; this does not claim that the refreshed release has been published.
+Linux arm64 and the alternate macOS architecture remain cross-build checks.
+
+The [local Cloudflare recheck](cloudflare.md) uses the current renderer in a
+temporary copy of the existing experiment. It exposed an unnecessary working-
+directory dependency in native PNG setup, now removed. A native regression
+decodes PNG after removing its working directory; the separate PoC stays unchanged.
+
 ## Remaining limits
 
 Admission checks are estimates, not preemptive CPU/memory isolation. D2 parsing,
@@ -59,7 +80,10 @@ and the previously reproduced SVG variants were checked.
 The old release's PNG renderer could not be compared without `rsvg-convert`.
 Local multistage Docker dependency fetching was blocked by container DNS; CI
 covers the full image build and non-root MCP calls. Native client checks covered
-Claude Code and Pi. Codex configuration parsing was exercised, but full plugin
-installation into its normal state directory was outside the writable workspace.
+Claude Code and Pi. Native Codex stdio/HTTP parsing was exercised with supported
+read-only overrides. Full plugin installation remains outside the writable
+workspace: the checked client has no supported separate install-location option
+and resolves its user directory before config overrides. No denied install or
+state-directory reroute was attempted in the follow-up.
 No permissions, credentials, merge, release, deployment, or separate Cloudflare
 experiment were changed by this review.

@@ -14,7 +14,7 @@ editor or storage service is added.
 | Remote icons | SVG retained the URL. The local fixture recorded zero server requests; a viewer could fetch the URL later. | Network image URLs are rejected, even with asset opt-ins. Download an approved image to the asset root or provide bounded inline data. Neither server nor returned SVG needs an image network fetch. |
 | SVG/GIF asset fidelity | Passed image references through to the consuming viewer | Supported SVG is rasterized through D2's strict, network-free importer; raw SVG markup is never embedded. Unsupported text/filter/mask or external-reference features fail explicitly. GIF uses its first frame. Use native shapes or pre-rasterize an unsupported asset. |
 | File output | `--write-files` wrote next to input and overwrote that same file on the second call | `--output-dir` controls the destination. Default writes are exclusive. Use explicit `output_name` plus `overwrite: true` and server `--allow-overwrite` for a stable filename. Automatic `--write-files` names remain unique. |
-| Existing links and concurrent output | `os.WriteFile` could truncate an existing path | Opt-in replacement writes a private temporary file and renames its directory entry. Existing symlinks/directories are refused; a hard-linked file is replaced without changing other links. Concurrent replacement is last-completed-writer wins, not CAS. Atomicity follows host `os.Rename` semantics. |
+| Existing links and concurrent output | `os.WriteFile` could truncate an existing path | All writes stage privately. Exclusive publication needs filesystem hard-link support and fails safely if unavailable. Opt-in replacement renames the complete file's directory entry. Existing symlinks/directories are refused; a hard-linked file is replaced without changing other links. Concurrent replacement is last-completed-writer wins, not CAS. Atomicity follows host `os.Rename` semantics. |
 | SVG MCP result | Text plus base64 `image/svg+xml` image content | Embedded text resource with original SVG XML. PNG remains image content, ASCII remains text. File output returns the server-local artifact path/link; omit it for an inline result. |
 | Appearance | Dagre, GrapeSoda, sketch, padding 5 | D2 defaults. Restore settings with `layout: "dagre"`, `theme_id: 6`, `sketch: true`, `padding: 5`; native PNG rasterization may differ. |
 
@@ -39,6 +39,12 @@ escapes, comments, and external resource references.
 HTTP POSTs accept one JSON-RPC object, including on legacy SSE; batches now fail
 with HTTP 400. Current-protocol disconnects cancel work cooperatively. Older
 protocol calls retain their application deadline because of SDK behavior.
+Checks between stages and 64 KiB write chunks stop further work after cancellation;
+slots remain occupied until synchronous work actually exits. Temporary-file
+cleanup never removes the final filename. Cancellation cannot undo a completed
+publication or backend commit; a successful committed result is retained when
+available. Individual compiler, decoder, and filesystem calls may still run to
+completion before the next check.
 
 For a trusted local project:
 
