@@ -128,7 +128,13 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 		return nil, err
 	}
 	source.FS = checkedFS
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	graph, config, err := d2compiler.Compile(source.Path, strings.NewReader(source.Code), &d2compiler.CompileOptions{FS: source.FS})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +188,9 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 		},
 	}
 	diagram, _, err := d2lib.Compile(ctx, source.Code, compile, render)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -218,6 +227,9 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 	}
 	if math.IsNaN(width) || math.IsNaN(height) || width > maxDimension || height > maxDimension || width*height > maxPixels || width < 0 || height < 0 {
 		return nil, failure("limit_exceeded", "diagram exceeds 8192 pixels per side or 16 million pixels; reduce size, padding, or scale")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return &Prepared{diagram, render, *compile.Layout}, nil
 }
@@ -380,6 +392,9 @@ func Render(ctx context.Context, p *Prepared, format, asciiMode string) ([]byte,
 			SketchBudget: d2scenebuild.SketchBudget{MaxOperationSets: 100_000, MaxOperations: 1_000_000, MaxPathCommands: 1_000_000},
 			LinkBudget:   d2scenebuild.LinkBudget{MaxRegions: 10_000, MaxStringBytes: MaxSourceBytes},
 		})
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if buildErr != nil {
 			return nil, buildErr
 		}
@@ -390,6 +405,9 @@ func Render(ctx context.Context, p *Prepared, format, asciiMode string) ([]byte,
 			MaxAssets: 100, MaxAssetBytes: 32 << 20, MaxDecodedAssetBytes: 64 << 20, MaxImportDepth: 16,
 			MaxOffscreenBytes: 64 << 20, MaxEvenOddClipWork: 100_000_000, MaxScanlineWork: 100_000_000,
 		})
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if renderErr != nil {
 			return nil, renderErr
 		}

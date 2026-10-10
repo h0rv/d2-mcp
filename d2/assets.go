@@ -43,12 +43,12 @@ func newAssetLoader(ctx context.Context, files fs.FS, inline bool) *assetLoader 
 }
 
 func (a *assetLoader) load(source *url.URL) (*url.URL, error) {
+	if err := a.ctx.Err(); err != nil {
+		return nil, err
+	}
 	key := source.String()
 	if cached := a.cache[key]; cached != nil {
 		return cached, nil
-	}
-	if err := a.ctx.Err(); err != nil {
-		return nil, err
 	}
 	if len(a.cache) >= 32 {
 		return nil, failure("limit_exceeded", "source exceeds 32 distinct image assets")
@@ -102,6 +102,9 @@ func (a *assetLoader) load(source *url.URL) (*url.URL, error) {
 	default:
 		return nil, failure("unsupported_feature", "image assets require --asset-dir or --allow-inline-assets; network and absolute paths are disabled")
 	}
+	if err := a.ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err != nil {
 		return nil, failure("unsupported_feature", "cannot decode or read image asset")
 	}
@@ -115,10 +118,10 @@ func (a *assetLoader) load(source *url.URL) (*url.URL, error) {
 			MaxBytes: MaxAssetBytes, MaxDepth: 32, MaxElements: 5000, MaxAttributes: 20000, MaxAttributeBytes: MaxAssetBytes,
 			MaxPathCommands: 50000, MaxTransformFunctions: 5000, MaxUseDepth: 16, MaxResources: 256,
 		})
+		if err := a.ctx.Err(); err != nil {
+			return nil, err
+		}
 		if importErr != nil {
-			if err := a.ctx.Err(); err != nil {
-				return nil, err
-			}
 			return nil, failure("unsupported_feature", fmt.Sprintf("unsupported SVG asset: %v", importErr))
 		}
 		if imported.Width <= 0 || imported.Height <= 0 || imported.Width > MaxAssetDimension || imported.Height > MaxAssetDimension {
@@ -139,12 +142,18 @@ func (a *assetLoader) load(source *url.URL) (*url.URL, error) {
 			MaxAssets: 256, MaxAssetBytes: MaxAssetBytes, MaxDecodedAssetBytes: 4 << 20, MaxImportDepth: 16,
 			MaxOffscreenBytes: 16 << 20, MaxEvenOddClipWork: 10_000_000, MaxScanlineWork: 10_000_000,
 		})
+		if err := a.ctx.Err(); err != nil {
+			return nil, err
+		}
 		if renderErr != nil {
 			return nil, renderErr
 		}
 		data, err = d2raster.EncodePNG(a.ctx, frame)
 	} else {
 		config, _, decodeErr := image.DecodeConfig(bytes.NewReader(data))
+		if err := a.ctx.Err(); err != nil {
+			return nil, err
+		}
 		if decodeErr != nil {
 			return nil, failure("unsupported_feature", "invalid raster image asset")
 		}
@@ -156,11 +165,17 @@ func (a *assetLoader) load(source *url.URL) (*url.URL, error) {
 			return nil, failure("limit_exceeded", "image assets exceed 8 million decoded pixels")
 		}
 		raster, _, err = image.Decode(bytes.NewReader(data))
+		if err := a.ctx.Err(); err != nil {
+			return nil, err
+		}
 		if err == nil {
 			var normalized bytes.Buffer
 			err = png.Encode(&normalized, raster)
 			data = normalized.Bytes()
 		}
+	}
+	if err := a.ctx.Err(); err != nil {
+		return nil, err
 	}
 	if err != nil {
 		return nil, failure("unsupported_feature", "cannot rasterize image asset")
@@ -253,7 +268,10 @@ func (noAssetNetwork) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 func rasterAssets() (*d2scenebuild.AssetOptions, error) {
-	resolver, err := imageasset.New(imageasset.Options{HTTPClient: &http.Client{Transport: noAssetNetwork{}}, Limits: imageasset.Limits{
+	// The prepared diagram contains only normalized inline assets. The resolver
+	// still requires a base directory; use a root so data-only PNG rendering does
+	// not depend on an available working directory (including in js/wasm).
+	resolver, err := imageasset.New(imageasset.Options{BaseDir: "/", HTTPClient: &http.Client{Transport: noAssetNetwork{}}, Limits: imageasset.Limits{
 		MaxFetchedBytes: MaxAssetBytes, MaxEncodedBytes: MaxAssetBytes, MaxDecompressedBytes: MaxAssetBytes, MaxSVGBytes: MaxAssetBytes,
 		MaxDecodedWidth: MaxAssetDimension, MaxDecodedHeight: MaxAssetDimension, MaxDecodedPixels: 1 << 20,
 		MaxAssets: 32, MaxCumulativeEncodedBytes: 32 << 20, MaxCumulativeDecodedBytes: 32 << 20,

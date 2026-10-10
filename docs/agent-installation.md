@@ -31,6 +31,8 @@ Start a new session and choose the `d2` skill from the skill/plugin picker, or a
 
 The commands above were checked with Codex CLI **0.159.0-alpha.3**. Older clients without plugin installation can register just the server as shown below. A portable skill may also be installed in a project's `.agents/skills/d2/SKILL.md` using the [Codex skills format](https://developers.openai.com/codex/skills).
 
+Codex plugin installation writes to the client's user configuration and plugin cache. `--cd` selects a workspace, and `--config` overrides values; neither supplies an isolated installation directory. The checked version has no plugin `--scope` or `--install-dir` option. Its [versioned plugin implementation](https://github.com/openai/codex/blob/rust-v0.159.0-alpha.3/codex-rs/cli/src/plugin_cmd.rs#L691) resolves the user directory before loading overrides, and [marketplace installation](https://github.com/openai/codex/blob/rust-v0.159.0-alpha.3/codex-rs/cli/src/marketplace_cmd.rs#L138) uses that directory. In a managed environment where it is read-only, installation needs to run in the user's normal client environment; a project config does not remove that requirement. This PR does not claim a complete Codex plugin installation was exercised in its restricted execution environment.
+
 ## Pi
 
 Use Pi **0.99.0 or later** for native MCP; verified here with `@earendil-works/pi-coding-agent` **1.1.0** (Node 22.19+). Pi installs the shared skill and prompts from the repository's root package manifest. Configure MCP separately:
@@ -108,6 +110,8 @@ Static GitHub packages always use the local `d2-mcp` command. `agents/defaults.j
 
 ```sh
 D2_MCP_TEST_BINARY=/absolute/path/d2-mcp python3 -m unittest discover -s agents -v
+# Optional native Codex parsing, with no saved settings or model requests:
+D2_MCP_TEST_CODEX=/absolute/path/codex python3 -m unittest discover -s agents -v
 ```
 
 Tests cover endpoint selection, URL rejection, non-destructive generation, static and generated manifest paths, matching client configurations including Unicode paths, and real stdio/loopback HTTP initialize/discover/validate/SVG-render flows. A static package also runs from a fresh directory outside the checkout with the binary on PATH and conflicting transport environment variables.
@@ -115,7 +119,7 @@ Tests cover endpoint selection, URL rejection, non-destructive generation, stati
 | Client | Verified without a model/account call |
 | --- | --- |
 | Claude Code 2.1.296 | Fresh copied root marketplace outside the checkout: native validation, install, and plugin-provided stdio MCP connection despite ambient HTTP transport |
-| Codex CLI 0.159.0-alpha.3 | Native stdio/HTTP config parsing and plugin command help; full plugin installation is blocked by this environment's read-only user configuration directory |
+| Codex CLI 0.159.0-alpha.3 | Native stdio/HTTP config parsing from a fresh directory, including Unicode paths, using read-only CLI overrides; full plugin installation remains blocked by the read-only user directory and lack of a separate install-location option |
 | Pi 1.1.0 | Fresh copied root package outside the checkout: native install, skill and both prompts loaded without diagnostics, stdio discovery; generated packages also passed argument expansion and loopback HTTP discovery |
 
 GitHub delivery of the new root manifests requires the PR branch to contain them; local fixture validation alone does not establish that they are published. These checks do not require model-account interaction or registry publication.

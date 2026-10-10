@@ -104,6 +104,9 @@ func (p *compileAdmission) file(name string, prefix []string, depth, imports int
 		}
 		code, err = io.ReadAll(io.LimitReader(f, int64(MaxSourceBytes-p.bytes)+1))
 		closeErr := f.Close()
+		if err := p.ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			return err
 		}
@@ -127,6 +130,9 @@ func (p *compileAdmission) file(name string, prefix []string, depth, imports int
 		}
 		var err error
 		ast, err = d2parser.Parse(name, bytes.NewReader(code), nil)
+		if err := p.ctx.Err(); err != nil {
+			return err
+		}
 		if err != nil {
 			return err
 		}

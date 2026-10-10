@@ -57,7 +57,7 @@ def endpoint(args, defaults):
     command = args.local_command or defaults["local_command"]
     resolved = shutil.which(command)
     if resolved is None:
-        raise ValueError(f"Local binary not found/executable: {command}; build it first or pass --url")
+        raise ValueError(f"Local binary not found/executable: {command}; install a release binary and add it to PATH, pass --local-command /absolute/path/d2-mcp, or pass --url")
     if any(argument.startswith("-") and argument.split("=", 1)[0].lstrip("-") in {"transport", "t", "sse"} for argument in args.server_arg):
         raise ValueError("Local client packages require stdio; use --url for an HTTP server")
     return {"type": "stdio", "command": str(Path(resolved).resolve()), "args": ["--transport", "stdio", *args.server_arg]}

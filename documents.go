@@ -47,6 +47,9 @@ func (noImports) Open(string) (fs.File, error) {
 	return nil, errors.New("stored documents must be self-contained; imports are disabled")
 }
 func (a *application) sourceWithDocument(ctx context.Context, args toolArgs) (d2.Source, error) {
+	if err := ctx.Err(); err != nil {
+		return d2.Source{}, err
+	}
 	if args.DocumentID == "" && args.Revision == "" {
 		return a.source(args)
 	}
@@ -59,6 +62,9 @@ func (a *application) sourceWithDocument(ctx context.Context, args toolArgs) (d2
 	doc, err := a.config.Store.Get(ctx, args.DocumentID)
 	if err != nil {
 		return d2.Source{}, documentError(err)
+	}
+	if err := ctx.Err(); err != nil {
+		return d2.Source{}, err
 	}
 	if doc.Revision != args.Revision {
 		return d2.Source{}, documentError(document.ErrConflict)
@@ -95,6 +101,9 @@ func (a *application) StoreD2Handler(ctx context.Context, r *mcp.CallToolRequest
 	}
 	ctx, cancel := context.WithTimeout(ctx, a.config.Timeout)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return errorResult("cancelled", err), nil
+	}
 	select {
 	case a.slots <- struct{}{}:
 		defer func() { <-a.slots }()

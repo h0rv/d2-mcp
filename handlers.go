@@ -180,6 +180,9 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	}
 	ctx, cancel := context.WithTimeout(ctx, a.config.Timeout)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return errorResult("cancelled", err), nil
+	}
 	select {
 	case a.slots <- struct{}{}:
 		defer func() { <-a.slots }()
@@ -200,6 +203,9 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	if err != nil {
 		return errorResult("invalid_d2", err), nil
 	}
+	if err := ctx.Err(); err != nil {
+		return errorResult("cancelled", err), nil
+	}
 	settings := map[string]any{"layout": prepared.Layout, "theme_id": *prepared.Options.ThemeID, "sketch": *prepared.Options.Sketch, "padding": *prepared.Options.Pad}
 	settings["board_path"] = append([]string{}, args.BoardPath...)
 	settings["center"] = *prepared.Options.Center
@@ -211,6 +217,9 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 		settings["dark_theme_id"] = *prepared.Options.DarkThemeID
 	}
 	if !render {
+		if err := ctx.Err(); err != nil {
+			return errorResult("cancelled", err), nil
+		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "D2 script compiled successfully"}}, StructuredContent: map[string]any{"status": "ok", "valid": true, "options": settings}}, nil
 	}
 	data, err := d2.Render(ctx, prepared, format, mode)
@@ -222,6 +231,9 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 			return errorResult("unsupported_feature", err), nil
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return errorResult("cancelled", err), nil
+	}
 	mime := map[string]string{"png": "image/png", "svg": "image/svg+xml", "ascii": "text/plain"}[format]
 	digest := sha256.Sum256(data)
 	meta := artifact{MIMEType: mime, Bytes: len(data), SHA256: hex.EncodeToString(digest[:])}
@@ -231,7 +243,7 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 		if err := ctx.Err(); err != nil {
 			return errorResult("cancelled", err), nil
 		}
-		meta.Path, err = a.writeArtifact(args.OutputName, format, data, args.Overwrite)
+		meta.Path, err = a.writeArtifact(ctx, args.OutputName, format, data, args.Overwrite)
 		if err != nil {
 			return errorResult("write_failed", err), nil
 		}
@@ -245,6 +257,9 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 			content = []mcp.Content{&mcp.EmbeddedResource{Resource: &mcp.ResourceContents{URI: meta.URI, MIMEType: mime, Text: string(data)}}}
 		case "ascii":
 			content = []mcp.Content{&mcp.TextContent{Text: string(data)}}
+		}
+		if err := ctx.Err(); err != nil {
+			return errorResult("cancelled", err), nil
 		}
 	}
 	return &mcp.CallToolResult{Content: content, StructuredContent: map[string]any{"status": "ok", "artifact": meta, "options": settings}}, nil

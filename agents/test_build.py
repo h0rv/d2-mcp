@@ -104,8 +104,29 @@ class PackagingTests(unittest.TestCase):
     def test_missing_binary_is_actionable(self):
         args = arguments()
         args.local_command = "/does-not-exist/d2-mcp"
-        with self.assertRaisesRegex(ValueError, "build it first"):
+        with self.assertRaisesRegex(ValueError, "install a release binary"):
             build.endpoint(args, {"remote_url": None})
+
+    @unittest.skipUnless(os.environ.get("D2_MCP_TEST_CODEX"), "Set D2_MCP_TEST_CODEX for native Codex config parsing")
+    def test_native_codex_config_without_persisting_settings(self):
+        """Use supported, read-only overrides; never change HOME or CODEX_HOME."""
+        servers = [
+            {"type": "stdio", "command": "/binary path/📊/d2-mcp", "args": ["--transport", "stdio", "--input-dir", "/some path/日本語"]},
+            {"type": "streamable-http", "url": "https://example.test/日本語/mcp"},
+        ]
+        for server in servers:
+            with self.subTest(server=server), tempfile.TemporaryDirectory() as temp:
+                destination = Path(temp) / "bundle"
+                build.build(destination, server)
+                config = tomllib.loads((destination / "configs/codex.toml").read_text())["mcp_servers"]["d2"]
+                command = [os.environ["D2_MCP_TEST_CODEX"]]
+                for key, value in config.items():
+                    command.extend(["-c", f"mcp_servers.d2_package_probe.{key}={build.toml_value(value)}"])
+                command.extend(["mcp", "get", "d2_package_probe", "--json"])
+                result = subprocess.run(command, cwd=temp, capture_output=True, text=True, timeout=15, check=True)
+                transport = json.loads(result.stdout)["transport"]
+                self.assertEqual({key: transport[key] for key in config}, config)
+                self.assertEqual(transport["type"], "stdio" if server["type"] == "stdio" else "streamable_http")
 
     def test_output_cannot_recurse_into_package_source(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -121,7 +122,10 @@ func (a *application) source(args toolArgs) (d2.Source, error) {
 	return d2.Source{Code: code, Path: name, FS: snapshot}, nil
 }
 
-func (a *application) writeArtifact(name, format string, data []byte, overwrite bool) (string, error) {
+func (a *application) writeArtifact(ctx context.Context, name, format string, data []byte, overwrite bool) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if a.output == nil {
 		return "", errors.New("artifact writes require --output-dir")
 	}
@@ -144,35 +148,56 @@ func (a *application) writeArtifact(name, format string, data []byte, overwrite 
 		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return "", errors.New("cannot inspect overwrite target")
 		}
+	}
+	// All writes stay private until complete. Cleanup never removes the final
+	// name: another request may have successfully replaced it in the meantime.
+	temp := ".d2-mcp-" + rand.Text() + ".tmp"
+	f, err := a.output.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return "", errors.New("cannot create temporary artifact")
+	}
+	defer a.output.Remove(temp)
+	writeErr := writeArtifactData(ctx, f, data)
+	closeErr := f.Close()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if errors.Join(writeErr, closeErr) != nil {
+		return "", errors.New("failed to write artifact")
+	}
+	if overwrite {
 		// Replace the directory entry, never truncate through an existing symlink
 		// or hard link. A concurrent target swap cannot redirect this rooted rename.
-		temp := ".d2-mcp-" + rand.Text() + ".tmp"
-		f, err := a.output.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-		if err != nil {
-			return "", errors.New("cannot create temporary artifact")
-		}
-		defer a.output.Remove(temp)
-		_, writeErr := f.Write(data)
-		closeErr := f.Close()
-		if errors.Join(writeErr, closeErr) != nil {
-			return "", errors.New("failed to write artifact")
-		}
 		if err := a.output.Rename(temp, name); err != nil {
 			return "", errors.New("failed to replace artifact")
 		}
-		return filepath.Join(a.outputPath, name), nil
-	}
-	// O_EXCL also refuses existing symlinks; inputs and existing artifacts are
-	// never overwritten. A failed write removes only the file this call created.
-	f, err := a.output.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return "", errors.New("cannot create artifact; choose a new output_name")
-	}
-	_, writeErr := f.Write(data)
-	closeErr := f.Close()
-	if err = errors.Join(writeErr, closeErr); err != nil {
-		_ = a.output.Remove(name)
-		return "", errors.New("failed to write artifact")
+	} else if err := a.output.Link(temp, name); err != nil {
+		// Hard-link publication atomically refuses any existing directory entry.
+		// An unsupported filesystem must fail rather than use a racy fallback.
+		if errors.Is(err, fs.ErrExist) {
+			return "", errors.New("cannot create artifact; choose a new output_name")
+		}
+		return "", errors.New("cannot publish artifact; output filesystem must support hard links")
 	}
 	return filepath.Join(a.outputPath, name), nil
+}
+
+// Check cancellation between bounded writes. A filesystem call already in
+// progress is not interruptible; publication can still race with cancellation.
+func writeArtifactData(ctx context.Context, w io.Writer, data []byte) error {
+	for len(data) > 0 {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		chunk := data[:min(len(data), 64<<10)]
+		n, err := w.Write(chunk)
+		if err != nil {
+			return err
+		}
+		if n != len(chunk) {
+			return io.ErrShortWrite
+		}
+		data = data[n:]
+	}
+	return ctx.Err()
 }

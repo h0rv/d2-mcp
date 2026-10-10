@@ -8,6 +8,7 @@ permissions:
   contents: read
 jobs:
   installer:
+    needs: cross-build
     strategy:
       matrix:
         include:
@@ -23,8 +24,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      - uses: actions/setup-go@v5
+        if: runner.os != 'Linux'
+        with:
+          go-version-file: go.mod
       - name: Check standalone installer and platform handling
         run: python -m unittest discover -s scripts -v
+      - name: Exercise native rendering, transports, and rooted files
+        if: runner.os != 'Linux'
+        run: go test -count=1 ./...
+      - name: Select native release artifact
+        id: platform
+        shell: bash
+        run: |
+          python -c 'import sys; sys.path.insert(0, "scripts"); import install; print("asset=" + install.asset_for_platform()); print("target=" + install.asset_for_platform().removeprefix("d2-mcp-").removesuffix(".exe"))' >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ steps.platform.outputs.target }}
+          path: release
+      - name: Install exact artifact outside checkout and exercise MCP
+        run: python scripts/check_artifact.py --binary release/${{ steps.platform.outputs.asset }} --version 0.0.0-ci
   test:
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +79,18 @@ jobs:
         run: |
           export GOOS="${TARGET%/*}"
           export GOARCH="${TARGET#*/}"
-          go build -trimpath -o "${RUNNER_TEMP}/d2-mcp" .
+          suffix=""
+          if [ "$GOOS" = windows ]; then suffix=".exe"; fi
+          mkdir -p release
+          go build -trimpath -ldflags '-X main.version=0.0.0-ci' -o "release/d2-mcp-$GOOS-$GOARCH$suffix" .
+          echo "target=$GOOS-$GOARCH" >> "$GITHUB_OUTPUT"
+        id: build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ steps.build.outputs.target }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 1
   container:
     runs-on: ubuntu-latest
     steps:
