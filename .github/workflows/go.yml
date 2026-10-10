@@ -36,3 +36,15 @@ jobs:
           export GOOS="${TARGET%/*}"
           export GOARCH="${TARGET#*/}"
           go build -trimpath -o "${RUNNER_TEMP}/d2-mcp" .
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: docker build -t d2-mcp:test .
+      - name: Exercise MCP through the non-root container
+        env:
+          D2_MCP_TEST_IMAGE: d2-mcp:test
+        run: go test -count=1 -run '^TestContainerStdio$' .

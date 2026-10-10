@@ -157,3 +157,11 @@ func TestHTTPStatelessAndBoundaries(t *testing.T) {
 		t.Fatalf("bad tool error: %+v", response)
 	}
 }
+
+func TestContainerStdio(t *testing.T) {
+	image := os.Getenv("D2_MCP_TEST_IMAGE")
+	if image == "" {
+		t.Skip("set D2_MCP_TEST_IMAGE to test a locally built container")
+	}
+	exerciseClient(t, &mcp.CommandTransport{Command: exec.Command("docker", "run", "--rm", "-i", image)}, "2025-11-25")
+}
