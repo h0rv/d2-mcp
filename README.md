@@ -27,6 +27,18 @@ go build -o d2-mcp .
 ./d2-mcp --version
 ```
 
+### Agent skills and plugins
+
+Generate a local package with the shared D2 skill, diagram/validation prompts, and client-specific MCP configuration:
+
+```sh
+python3 agents/build.py --local-command "$PWD/d2-mcp" --output ./agents/build/local
+```
+
+Follow the short [Claude Code, Codex, and Pi install guide](docs/agent-installation.md) for that bundle. Python 3.11+ is needed only for generation. Setup does not modify existing client settings or install a state backend.
+
+For an endpoint you operate, use `python3 agents/build.py --url "$D2_MCP_URL" --output ./agents/build/remote`. No hosted endpoint is assumed. After an authorized, verified deployment, maintainers can set the single default in `agents/defaults.json` to make newly generated packages prefer remote; explicit local setup remains available.
+
 ## Clients and transports
 
 Stdio remains the default. For Claude Desktop or another client using `mcpServers`:
@@ -98,9 +110,11 @@ Example `tools/call` parameters:
 | `padding` | Integer 0–1000; explicit zero is honored |
 | `scale` | Number 0.1–4 for SVG/PNG; ASCII uses its own character grid |
 | `center` | Boolean controlling SVG/PNG centering |
+| `board_path` | Board-kind/name pairs, e.g. `["layers", "overview"]`; omitted selects root |
 | `format` | Render only: `png` (default), `svg`, `ascii` |
 | `ascii_mode` | Render only: `extended` or `standard` connectors; labels retain their source characters |
-| `output_name` | Render only, with `--output-dir`: new `.png`, `.svg`, or `.txt` filename, without directories |
+| `output_name` | Render only, with `--output-dir`: `.png`, `.svg`, or `.txt` filename, without directories |
+| `overwrite` | Explicit replacement; requires `--allow-overwrite` and `output_name` |
 
 Explicit options override `vars: {d2-config: {...}}` source settings. Otherwise D2's defaults apply: Dagre, neutral theme 0, no sketch, padding 100. Source layout settings are respected. ASCII supports the selected layout but does not show colors, sketch strokes, or other image-only styles.
 
@@ -134,23 +148,31 @@ mkdir -p diagrams artifacts
 
 A request with `file_path: "architecture.d2"` may import other `.d2` files within that root. Inline source may also import from that root when configured. Absolute paths, `..` escapes, and symlinks escaping the root are rejected. Sources are snapshotted per call so validation and layout see the same imported bytes.
 
-Without `output_name`, results stay inline. To save a local artifact, include `output_name: "architecture.svg"` and `format: "svg"`. Files are created with exclusive creation and private permissions; existing files and symlinks are never overwritten. The result includes the server-local path and a `file:` resource link. This server does not expose a download endpoint for those files. Use the inline artifact for a remote client, or arrange access outside this server.
+Without `output_name`, results stay inline. To save a local artifact, include `output_name: "architecture.svg"` and `format: "svg"`. Files use exclusive creation and private permissions by default. The result includes the server-local path and a `file:` resource link. This server does not expose a download endpoint for those files. Use the inline artifact for a remote client, or arrange access outside this server.
+
+For a trusted file pipeline that refreshes a fixed filename, start with `--output-dir ./artifacts --allow-overwrite`, then explicitly pass `overwrite: true` and `output_name` on each replacement call. The server writes a temporary file in that root and renames it over the destination; it never truncates through an existing symlink or hard link. Existing symlinks and directories are refused. Concurrent replacements are last-completed-writer wins; this is not a revision/CAS API. Atomic replacement follows the host filesystem's `os.Rename` semantics (not guaranteed atomic on non-Unix platforms).
 
 `--write-files --output-dir ./artifacts` retains the automatic file-output mode for `file_path` calls, now with unique filenames in the output root. It does not write next to arbitrary input paths.
 
+### Images and boards
+
+Native shapes need no extra configuration. To use local image/icon files, start with `--asset-dir ./assets`; icon paths are relative to that root, independently of the source directory. `--allow-inline-assets` permits base64 data URLs for agents without local files. PNG, JPEG, GIF (first frame), and D2's restricted SVG subset are decoded and converted to embedded PNG, including within SVG output. Quote icon values, especially data URLs. A local example is `service: {icon: "icons/service.svg"}`. Unsupported SVG features fail explicitly; download approved remote images into the asset root yourself. The server never fetches image URLs.
+
+Multi-board source is accepted. Each render returns one artifact: root by default, or a selected board using exact pairs such as `board_path: ["layers", "overview", "scenarios", "failure"]`. D2 resolves scenario/step inheritance. Validation and aggregate limits cover all boards, including unselected ones. Batch export, animation, and cross-board navigation are not provided.
+
 ### Limits and supported subset
 
-The server admits at most 256 KiB of combined source, 32 source files, 1000 objects, 2000 connections, two simultaneous diagram operations, and 16 MiB per returned artifact. Layout bounds are capped at 8192 pixels per side and 16 million pixels; native PNG additionally has explicit scene, raster, asset, and work budgets. MCP input frames/bodies are capped at 2 MiB. ASCII has a separate pre-allocation ceiling of 2000 cells per side and 1 million cells, independent of image scale; legends require SVG/PNG. Calls have a cooperative 30-second timeout (`--timeout`, at most 5m). Busy calls fail immediately and can be retried.
+The server admits at most 256 KiB of combined source, 32 source files, 32 boards including root, 1000 objects and 2000 connections across all boards, two simultaneous diagram operations, and 16 MiB per returned artifact. Layout bounds are capped at 8192 pixels per side and 16 million pixels; native PNG additionally has explicit scene, raster, asset, and work budgets. MCP input frames/bodies are capped at 2 MiB. ASCII has a separate pre-allocation ceiling of 2000 cells per side and 1 million cells, independent of image scale; legends require SVG/PNG. Calls have a cooperative 30-second timeout (`--timeout`, at most 5m). Busy calls fail immediately and can be retried.
 
 Timeouts are cooperative: parsing and some upstream work are not preemptible. These limits are useful bounds, not process isolation or a security audit. Run untrusted workloads with operating-system memory/CPU limits.
 
-Icons and image assets (remote URLs, local files, and data URLs) are rejected. Native shapes, text, Markdown labels, code, and mathematical labels remain available; D2 omits Markdown images. No rendering network access or ambient filesystem image loading is enabled. SVG links permit HTTP, HTTPS, mailto, and fragments; emitted SVG is checked for active content and external image references. Multi-board source is rejected explicitly; send one board per call. TALA seed arrays are capped at 16.
+Assets are disabled unless explicitly enabled by the server. Limits include 32 distinct images, 1 MiB each, 8 MiB combined input, 1024 pixels per side, and 8 million combined decoded pixels. Repeated SVG assets have a conservative 8 MiB expansion budget before rendering. Native shapes, text, Markdown labels, code, and mathematical labels remain available; D2 omits Markdown images. No rendering network access or ambient filesystem image loading is enabled. SVG links permit HTTP, HTTPS, mailto, and fragments; emitted SVG is checked for active content and external image references. TALA seed arrays are capped at 16.
 
 ## Optional document-store adapter
 
 The shipped binary has **no state backend**, no storage flags, and only the three core tools. Integrators can supply the small [`document.Store`](document/store.go) interface via `config.Store` when constructing the application in a custom build. This is an adapter seam, not a hosted database or an authentication implementation.
 
-A configured store adds `store-d2` for complete source replacement with atomic compare-and-swap, and enables `document_id` plus `revision` as an alternative input to validate/render. Create with `expected_revision: ""`; update only using the exact previous revision. The backend must return a new opaque revision for every successful write. Sources stored this way must be self-contained: server-local imports are rejected. The interface contract requires authorization from request context, bounded storage, cancellation, concurrency safety, and atomic revision checks shared across replicas.
+A configured store adds `store-d2` for complete source replacement with atomic compare-and-swap, and enables `document_id` plus `revision` as an alternative input to validate/render. Create with `expected_revision: ""`; update only using the exact previous revision. The backend must return a new opaque revision for every successful write. Sources stored this way must be self-contained: server-local imports and local assets are rejected. Inline assets are usable only when the server enables them. The interface contract requires authorization from request context, bounded storage, cancellation, concurrency safety, and atomic revision checks shared across replicas.
 
 ```json
 {"name":"store-d2","arguments":{"document_id":"architecture","expected_revision":"","code":"client -> api"}}
@@ -185,9 +207,9 @@ The image runs as a non-root user and includes the statically built Go server. F
 - D2 moved from `oss.terrastruct.com/d2` to `github.com/d2lang/d2`; Go 1.27.2 is required by this build. MCP moved from mark3labs to the official Go SDK.
 - Rendering now uses D2 defaults. For the old appearance request `layout: "dagre"`, `theme_id: 6`, `sketch: true`, `padding: 5`. Native PNG may differ in rasterization from librsvg.
 - PNG is always available without an external converter. SVG content changes from an MCP image to an embedded resource containing the original XML.
-- Both source arguments together are now an error. File input requires `--input-dir`; automatic file output also requires `--output-dir`. No overwrite or arbitrary absolute paths.
+- Both source arguments together are now an error. File input requires `--input-dir`; automatic file output also requires `--output-dir`. Arbitrary absolute paths remain disallowed; replacement requires both server and request opt-ins.
 - HTTP is stateless and binds loopback; specify `--host 0.0.0.0` for container networking. Legacy SSE still requires a continuous connection and uses the message URL supplied by the SDK.
-- Remote/local image assets and multi-board diagrams now return explicit unsupported-feature errors.
+- Local/inline images are preserved through explicit asset opt-ins and normalized embedding; network references are rejected. Multi-board sources retain root output by default and gain exact board selection. See the [verified compatibility matrix](docs/compatibility.md) for 1.2.0 behavior and migration examples.
 
 ### Appearance comparison
 
@@ -207,4 +229,4 @@ go build ./...
 npx @modelcontextprotocol/inspector ./d2-mcp
 ```
 
-Tests decode real native PNGs, check SVG/ASCII, exercise all three layouts, source configuration and explicit overrides, rooted imports and safe file creation, structured failures, concurrent rendering, stateless HTTP across instances, current/legacy MCP negotiation, SSE, a real stdio subprocess, and the optional storage adapter. CI builds release target platforms without publishing them on pull requests.
+Tests decode real native PNGs, check SVG/ASCII, exercise all three layouts, source configuration and explicit overrides, inherited board selection, bounded image embedding, rooted imports and file replacement, structured failures, concurrent rendering, stateless HTTP across instances, current/legacy MCP negotiation, SSE, a real stdio subprocess, and the optional storage adapter. CI also checks generated agent packages through real MCP calls and builds release target platforms without publishing them on pull requests.

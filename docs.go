@@ -16,8 +16,9 @@ const serverInstructions = `Validate and render complete D2 diagrams with D2 0.9
 - Supply exactly one of code or a relative file_path inside the configured input directory.
 - Select dagre, elk, or tala with layout. Set theme_id, sketch, padding, scale, and center per call.
 - Explicit options override source vars.d2-config; otherwise use D2 defaults.
-- File access is opt-in. Output writes require an output directory and never overwrite.
-- Icons/images and multi-board diagrams are unsupported. Use native shapes and one board per call.
+- File access is opt-in. Output writes require an output directory; overwrite needs explicit server and call opt-ins.
+- Select a board with board_path pairs, e.g. ["layers", "overview"]. Omitted means root; each call returns one board.
+- Image assets need --asset-dir or --allow-inline-assets; network image fetching is disabled. Use native shapes by default.
 - Errors are tool results with isError, readable text, and structured diagnostics when available.
 - HTTP is stateless: resend complete source/options. There is no default document storage.
 - If a deployment configures a document-store adapter, explicitly retain document_id/revision

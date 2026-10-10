@@ -101,7 +101,7 @@ func (a *application) StoreD2Handler(ctx context.Context, r *mcp.CallToolRequest
 	default:
 		return errorResult("busy", errors.New("renderer is busy; retry later")), nil
 	}
-	if _, err := d2.Prepare(ctx, d2.Source{Code: args.Code, Path: "input.d2", FS: noImports{}}, d2.Options{}); err != nil {
+	if _, err := d2.Prepare(ctx, d2.Source{Code: args.Code, Path: "input.d2", FS: noImports{}, InlineAssets: a.config.AllowInlineAssets}, d2.Options{}); err != nil {
 		return errorResult("invalid_d2", err), nil
 	}
 	if err := ctx.Err(); err != nil {

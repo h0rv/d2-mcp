@@ -34,6 +34,7 @@ func (a *application) server() *mcp.Server {
 			"padding":       map[string]any{"type": "integer", "minimum": 0, "maximum": 1000},
 			"scale":         map[string]any{"type": "number", "minimum": 0.1, "maximum": 4},
 			"center":        map[string]any{"type": "boolean"},
+			"board_path":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "maxItems": 16, "description": "Board-kind/name pairs, e.g. [layers, overview, scenarios, failure]; omitted selects root"},
 		}
 		if a.config.Store != nil {
 			p["document_id"] = map[string]any{"type": "string", "description": "Stored complete source ID; requires revision; mutually exclusive with code and file_path"}
@@ -43,13 +44,17 @@ func (a *application) server() *mcp.Server {
 			p["format"] = map[string]any{"type": "string", "enum": []string{"png", "svg", "ascii"}}
 			p["ascii_mode"] = map[string]any{"type": "string", "enum": []string{"extended", "standard"}}
 			if a.output != nil {
-				p["output_name"] = map[string]any{"type": "string", "description": "New filename inside --output-dir; .png, .svg, or .txt. Never overwrites."}
+				p["output_name"] = map[string]any{"type": "string", "description": "Filename inside --output-dir; .png, .svg, or .txt. Exclusive creation by default."}
+				if a.config.AllowOverwrite {
+					p["overwrite"] = map[string]any{"type": "boolean", "description": "Explicitly replace output_name; requires --allow-overwrite"}
+				}
 			}
 		}
 		return p
 	}
-	closed, nonDestructive := false, false
+	closed := false
 	for _, render := range []bool{false, true} {
+		destructive := render && a.config.AllowOverwrite
 		name, description, handler := "compile-d2", "Validate D2 syntax, semantics, layout, and server limits", a.CompileD2Handler
 		if render {
 			name, description, handler = "render-d2", "Render one D2 diagram to PNG, SVG, or ASCII; returns an inline artifact unless file output is requested", a.RenderD2Handler
@@ -60,7 +65,7 @@ func (a *application) server() *mcp.Server {
 		}
 		s.AddTool(&mcp.Tool{Name: name, Description: description,
 			InputSchema: map[string]any{"type": "object", "properties": properties(render), "additionalProperties": false, "oneOf": sourceChoices},
-			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: !render || a.output == nil, DestructiveHint: &nonDestructive, OpenWorldHint: &closed, IdempotentHint: !render || a.output == nil},
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: !render || a.output == nil, DestructiveHint: &destructive, OpenWorldHint: &closed, IdempotentHint: !render || a.output == nil},
 		}, handler)
 	}
 	s.AddTool(&mcp.Tool{Name: "fetch_d2_cheat_sheet", Description: "Retrieve the bundled D2 quick reference and server limits", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closed}}, FetchD2CheatSheetHandler)
@@ -110,6 +115,9 @@ func run() error {
 	flag.StringVar(&c.ASCIIMode, "ascii-mode", "extended", "ASCII connectors (extended, standard)")
 	flag.StringVar(&c.InputDir, "input-dir", "", "Allow reading .d2 files/imports inside this existing directory")
 	flag.StringVar(&c.OutputDir, "output-dir", "", "Allow creating artifacts inside this existing directory")
+	flag.StringVar(&c.AssetDir, "asset-dir", "", "Allow bounded image/icon files relative to this existing directory; no network access")
+	flag.BoolVar(&c.AllowInlineAssets, "allow-inline-assets", false, "Allow bounded base64 image/icon data URLs")
+	flag.BoolVar(&c.AllowOverwrite, "allow-overwrite", false, "Allow explicit overwrite:true with output_name inside --output-dir")
 	flag.BoolVar(&c.WriteFiles, "write-files", false, "Write file_path renders into --output-dir with unique names")
 	flag.DurationVar(&c.Timeout, "timeout", 30*time.Second, "Per-call cooperative timeout, maximum 5m")
 	showVersion := flag.Bool("version", false, "Print version and exit")

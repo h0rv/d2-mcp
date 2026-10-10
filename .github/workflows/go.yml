@@ -18,6 +18,13 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
       - run: go build ./...
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate agent packages and real MCP connections
+        run: |
+          go build -o d2-mcp .
+          D2_MCP_TEST_BINARY="$PWD/d2-mcp" python3 -m unittest discover -s agents -v
   cross-build:
     runs-on: ubuntu-latest
     strategy:

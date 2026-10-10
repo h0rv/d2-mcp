@@ -137,7 +137,7 @@ func TestStructuredErrors(t *testing.T) {
 		{"source padding", map[string]any{"code": "vars: {d2-config.pad: 99999}\na"}, "invalid_arguments"},
 		{"oversized", map[string]any{"code": strings.Repeat("a", d2.MaxSourceBytes+1)}, "invalid_arguments"},
 		{"huge dimensions", map[string]any{"code": "a.width: 999999999"}, "limit_exceeded"},
-		{"boards", map[string]any{"code": "layers: {x: {a -> b}}"}, "unsupported_feature"},
+		{"missing board", map[string]any{"code": "a", "board_path": []string{"layers", "missing"}}, "invalid_arguments"},
 		{"remote image", map[string]any{"code": "a.icon: http://127.0.0.1:1/private"}, "unsupported_feature"},
 		{"local image", map[string]any{"code": "a.icon: /etc/passwd"}, "unsupported_feature"},
 		{"unsafe link", map[string]any{"code": "a.link: javascript:alert(1)"}, "unsupported_feature"},

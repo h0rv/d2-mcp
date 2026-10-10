@@ -38,6 +38,7 @@ const maxPixels = 16_000_000
 
 // Options use pointers so explicit false and zero override source configuration.
 type Options struct {
+	BoardPath   []string `json:"board_path,omitempty"`
 	Layout      *string  `json:"layout,omitempty"`
 	ThemeID     *int64   `json:"theme_id,omitempty"`
 	DarkThemeID *int64   `json:"dark_theme_id,omitempty"`
@@ -53,8 +54,10 @@ func (e *Error) Error() string           { return e.Message }
 func failure(code, message string) error { return &Error{code, message} }
 
 type Source struct {
-	Code, Path string
-	FS         fs.FS
+	Code, Path   string
+	FS           fs.FS
+	Assets       fs.FS
+	InlineAssets bool
 }
 type Prepared struct {
 	Diagram *d2target.Diagram
@@ -76,6 +79,14 @@ func LayoutResolver(engine string) (d2graph.LayoutGraph, error) {
 }
 
 func checkOptions(o Options) error {
+	if len(o.BoardPath) > 16 || len(o.BoardPath)%2 != 0 {
+		return failure("invalid_arguments", "board_path must contain up to eight board-kind/name pairs")
+	}
+	for i := 0; i < len(o.BoardPath); i += 2 {
+		if (o.BoardPath[i] != "layers" && o.BoardPath[i] != "scenarios" && o.BoardPath[i] != "steps") || o.BoardPath[i+1] == "" {
+			return failure("invalid_arguments", "board_path must alternate layers/scenarios/steps and a board name")
+		}
+	}
 	if o.Layout != nil {
 		if _, err := LayoutResolver(*o.Layout); err != nil {
 			return err
@@ -115,7 +126,8 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := checkGraph(graph); err != nil {
+	assets := newAssetLoader(ctx, source.Assets, source.InlineAssets)
+	if err := checkGraph(graph, assets); err != nil {
 		return nil, err
 	}
 	// Match D2's precedence: explicit arguments, source vars.d2-config, defaults.
@@ -167,6 +179,18 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 	if err != nil {
 		return nil, err
 	}
+	diagram = selectBoard(diagram, o.BoardPath)
+	if diagram == nil {
+		return nil, failure("invalid_arguments", "board_path does not identify a board")
+	}
+	// Each call returns one selected board. Native raster scenes reject child
+	// boards, while SVG would silently render only the selected board anyway.
+	selected := *diagram
+	selected.Layers, selected.Scenarios, selected.Steps = nil, nil, nil
+	diagram = &selected
+	if err := assets.embed(diagram); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -183,21 +207,61 @@ func Prepare(ctx context.Context, source Source, o Options) (*Prepared, error) {
 	return &Prepared{diagram, render, *compile.Layout}, nil
 }
 
-func checkGraph(g *d2graph.Graph) error {
-	if len(g.Layers)+len(g.Scenarios)+len(g.Steps) > 0 {
-		return failure("unsupported_feature", "multi-board diagrams are not supported; submit one board per call")
+// D2's GetBoard also accepts shorthand paths. Walk exact kind/name pairs here
+// so quoted boards named "layers", "scenarios", or "steps" stay unambiguous.
+func selectBoard(diagram *d2target.Diagram, path []string) *d2target.Diagram {
+	for i := 0; i < len(path); i += 2 {
+		var children []*d2target.Diagram
+		switch path[i] {
+		case "layers":
+			children = diagram.Layers
+		case "scenarios":
+			children = diagram.Scenarios
+		case "steps":
+			children = diagram.Steps
+		}
+		diagram = nil
+		for _, child := range children {
+			if child.Name == path[i+1] {
+				diagram = child
+				break
+			}
+		}
+		if diagram == nil {
+			return nil
+		}
 	}
-	objects, edges := g.Objects, g.Edges
-	if g.Legend != nil {
-		objects = append(append([]*d2graph.Object{}, objects...), g.Legend.Objects...)
-		edges = append(append([]*d2graph.Edge{}, edges...), g.Legend.Edges...)
-	}
-	if len(objects) > 1000 || len(edges) > 2000 {
-		return failure("limit_exceeded", "diagram exceeds 1000 objects or 2000 connections")
+	return diagram
+}
+
+func checkGraph(g *d2graph.Graph, assets *assetLoader) error {
+	var objects []*d2graph.Object
+	var edges []*d2graph.Edge
+	graphs := []*d2graph.Graph{g}
+	for i := 0; i < len(graphs); i++ {
+		board := graphs[i]
+		graphs = append(graphs, board.Layers...)
+		graphs = append(graphs, board.Scenarios...)
+		graphs = append(graphs, board.Steps...)
+		if len(graphs) > 32 {
+			return failure("limit_exceeded", "source exceeds 32 boards including the root")
+		}
+		objects = append(objects, board.Root)
+		objects = append(objects, board.Objects...)
+		edges = append(edges, board.Edges...)
+		if board.Legend != nil {
+			objects = append(objects, board.Legend.Objects...)
+			edges = append(edges, board.Legend.Edges...)
+		}
+		if len(objects)-i-1 > 1000 || len(edges) > 2000 {
+			return failure("limit_exceeded", "source exceeds 1000 objects or 2000 connections across its boards")
+		}
 	}
 	check := func(a d2graph.Attributes) error {
 		if a.Icon != nil {
-			return failure("unsupported_feature", "icons and external image assets are disabled; use native D2 shapes")
+			if _, err := assets.load(a.Icon); err != nil {
+				return err
+			}
 		}
 		if a.Link != nil && !SafeLink(a.Link.Value) {
 			return failure("unsupported_feature", "links must use http, https, mailto, or a fragment")
@@ -211,9 +275,6 @@ func checkGraph(g *d2graph.Graph) error {
 			}
 		}
 		return nil
-	}
-	if err := check(g.Root.Attributes); err != nil {
-		return err
 	}
 	for _, obj := range objects {
 		if err := check(obj.Attributes); err != nil {
@@ -248,6 +309,9 @@ func Render(ctx context.Context, p *Prepared, format, asciiMode string) ([]byte,
 	var err error
 	switch format {
 	case "svg":
+		if err := checkSVGAssetExpansion(p.Diagram); err != nil {
+			return nil, err
+		}
 		data, err = d2svg.Render(p.Diagram, p.Options)
 	case "ascii":
 		if err := checkASCIICanvas(p.Diagram); err != nil {
@@ -260,8 +324,13 @@ func Render(ctx context.Context, p *Prepared, format, asciiMode string) ([]byte,
 		data, err = d2ascii.NewASCIIartist().Render(ctx, p.Diagram, opts)
 	case "png":
 		opts := p.Options
+		assets, assetErr := rasterAssets()
+		if assetErr != nil {
+			return nil, assetErr
+		}
 		doc, buildErr := d2scenebuild.Build(ctx, p.Diagram, d2scenebuild.Options{
-			Pad: opts.Pad, Scale: opts.Scale, Center: opts.Center, ThemeID: opts.ThemeID, ThemeOverrides: opts.ThemeOverrides, Sketch: *opts.Sketch,
+			Assets: assets,
+			Pad:    opts.Pad, Scale: opts.Scale, Center: opts.Center, ThemeID: opts.ThemeID, ThemeOverrides: opts.ThemeOverrides, Sketch: *opts.Sketch,
 			MaxNodes: 100_000, MaxPathCommands: 1_000_000,
 			SketchBudget: d2scenebuild.SketchBudget{MaxOperationSets: 100_000, MaxOperations: 1_000_000, MaxPathCommands: 1_000_000},
 			LinkBudget:   d2scenebuild.LinkBudget{MaxRegions: 10_000, MaxStringBytes: MaxSourceBytes},

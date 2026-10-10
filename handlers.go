@@ -25,16 +25,17 @@ import (
 )
 
 type config struct {
-	Format, ASCIIMode, InputDir, OutputDir string
-	WriteFiles                             bool
-	Timeout                                time.Duration
-	Store                                  document.Store
+	Format, ASCIIMode, InputDir, OutputDir, AssetDir string
+	WriteFiles                                       bool
+	AllowOverwrite, AllowInlineAssets                bool
+	Timeout                                          time.Duration
+	Store                                            document.Store
 }
 type application struct {
-	config        config
-	input, output *os.Root
-	outputPath    string
-	slots         chan struct{}
+	config                config
+	input, output, assets *os.Root
+	outputPath            string
+	slots                 chan struct{}
 }
 
 func newApplication(c config) (*application, error) {
@@ -49,6 +50,9 @@ func newApplication(c config) (*application, error) {
 	}
 	if c.WriteFiles && c.OutputDir == "" {
 		return nil, errors.New("--write-files requires --output-dir")
+	}
+	if c.AllowOverwrite && c.OutputDir == "" {
+		return nil, errors.New("--allow-overwrite requires --output-dir")
 	}
 	a := &application{config: c, slots: make(chan struct{}, 2)}
 	var err error
@@ -68,6 +72,13 @@ func newApplication(c config) (*application, error) {
 			return nil, err
 		}
 	}
+	if c.AssetDir != "" {
+		a.assets, err = os.OpenRoot(c.AssetDir)
+		if err != nil {
+			a.Close()
+			return nil, err
+		}
+	}
 	return a, nil
 }
 func (a *application) Close() {
@@ -76,6 +87,9 @@ func (a *application) Close() {
 	}
 	if a.output != nil {
 		a.output.Close()
+	}
+	if a.assets != nil {
+		a.assets.Close()
 	}
 }
 
@@ -87,6 +101,7 @@ type toolArgs struct {
 	Format     string  `json:"format,omitempty"`
 	ASCIIMode  string  `json:"ascii_mode,omitempty"`
 	OutputName string  `json:"output_name,omitempty"`
+	Overwrite  bool    `json:"overwrite,omitempty"`
 	d2.Options
 }
 type diagnostic struct {
@@ -134,8 +149,8 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	if err := decoder.Decode(&args); err != nil {
 		return errorResult("invalid_arguments", err), nil
 	}
-	if !render && (args.Format != "" || args.ASCIIMode != "" || args.OutputName != "") {
-		return errorResult("invalid_arguments", errors.New("format, ascii_mode, and output_name apply only to render-d2")), nil
+	if !render && (args.Format != "" || args.ASCIIMode != "" || args.OutputName != "" || args.Overwrite) {
+		return errorResult("invalid_arguments", errors.New("format, ascii_mode, output_name, and overwrite apply only to render-d2")), nil
 	}
 	format := a.config.Format
 	if args.Format != "" {
@@ -160,6 +175,9 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	if args.OutputName != "" && a.output == nil {
 		return errorResult("file_access_denied", errors.New("output_name requires --output-dir")), nil
 	}
+	if args.Overwrite && (!a.config.AllowOverwrite || args.OutputName == "") {
+		return errorResult("file_access_denied", errors.New("overwrite requires --allow-overwrite and an explicit output_name")), nil
+	}
 	ctx, cancel := context.WithTimeout(ctx, a.config.Timeout)
 	defer cancel()
 	select {
@@ -174,11 +192,16 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	if err != nil {
 		return errorResult("invalid_arguments", err), nil
 	}
+	if a.assets != nil && args.DocumentID == "" {
+		source.Assets = a.assets.FS()
+	}
+	source.InlineAssets = a.config.AllowInlineAssets
 	prepared, err := d2.Prepare(ctx, source, args.Options)
 	if err != nil {
 		return errorResult("invalid_d2", err), nil
 	}
 	settings := map[string]any{"layout": prepared.Layout, "theme_id": *prepared.Options.ThemeID, "sketch": *prepared.Options.Sketch, "padding": *prepared.Options.Pad}
+	settings["board_path"] = append([]string{}, args.BoardPath...)
 	settings["center"] = *prepared.Options.Center
 	settings["scale"] = 1.0
 	if prepared.Options.Scale != nil {
@@ -208,7 +231,7 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 		if err := ctx.Err(); err != nil {
 			return errorResult("cancelled", err), nil
 		}
-		meta.Path, err = a.writeArtifact(args.OutputName, format, data)
+		meta.Path, err = a.writeArtifact(args.OutputName, format, data, args.Overwrite)
 		if err != nil {
 			return errorResult("write_failed", err), nil
 		}
@@ -273,10 +296,11 @@ func checkSVG(data []byte) error {
 func ptr[T any](v T) *T { return &v }
 
 // D2's built-in grain pattern embeds a PNG. Allow bounded raster data, never SVG
-// data (which can itself contain links/scripts). Source icons are still rejected.
+// data (which can itself contain links/scripts). Enabled source assets have
+// already been decoded/rasterized and normalized to PNG by the asset loader.
 func safeEmbeddedPNG(value string) bool {
 	const prefix = "data:image/png;base64,"
-	if !strings.HasPrefix(value, prefix) || len(value) > 128<<10 {
+	if !strings.HasPrefix(value, prefix) || len(value) > base64.StdEncoding.EncodedLen(d2.MaxAssetBytes)+len(prefix) {
 		return false
 	}
 	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, prefix))

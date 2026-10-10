@@ -69,7 +69,7 @@ formula: |latex
 |
 ```
 
-PNG is native Go; no browser or converter is needed. D2 omits Markdown images. Icons and image assets are disabled here, including data URLs. Use native shapes instead. Links in SVG may use HTTP, HTTPS, mailto, or a fragment; the server never fetches a source URL.
+PNG is native Go; no browser or converter is needed. D2 omits Markdown images. Native shapes work by default. For icons/images, the server must enable `--asset-dir` for relative local PNG/JPEG/GIF/SVG paths or `--allow-inline-assets` for base64 data URLs. Quote icon values, especially data URLs containing a semicolon. Assets are bounded and converted to embedded PNG; SVG uses a restricted importer, GIF uses its first frame. Network image URLs are never fetched. Links in SVG may use HTTP, HTTPS, mailto, or a fragment.
 
 ## Sequence diagrams
 
@@ -101,11 +101,11 @@ orders.user_id -> users.id
 
 A rooted file may use `...@common.d2` to import another `.d2` file under the configured input directory. Paths are relative; neither absolute paths nor escaping symlinks are allowed. Imports are snapshotted per request. Complete stored documents in optional storage adapters cannot use local imports.
 
-PNG returns MCP image content; SVG returns an embedded text resource containing the XML; ASCII returns text. Structured results include artifact size, SHA-256, MIME type, URI, and effective settings. `output_name` writes a new file only when `--output-dir` is configured. Never assume returned resource URIs are persistent download endpoints.
+PNG returns MCP image content; SVG returns an embedded text resource containing the XML; ASCII returns text. Structured results include artifact size, SHA-256, MIME type, URI, and effective settings. `output_name` writes a new file only when `--output-dir` is configured. Replacing it additionally requires `--allow-overwrite` and `overwrite: true`; symlinks and directories are refused. Never assume returned resource URIs are persistent download endpoints.
 
 ASCII `extended` uses Unicode box drawing; `standard` uses basic ASCII connectors. Source labels retain their own characters. Image styling, color, and sketch strokes do not appear in ASCII. Keep labels short; the server bounds the ASCII canvas before allocation. Legends require SVG or PNG.
 
-Only single-board diagrams are supported. Submit each desired layer/scenario/step as a separate complete source. Limits include 256 KiB combined source, 32 files, 1000 objects, 2000 connections, two simultaneous operations, and a cooperative timeout. Reduce diagrams after `limit_exceeded`; retry `busy` errors later. Tool errors have `isError: true` plus a structured error code and located diagnostics when available.
+Multi-board source is supported; each call renders one board. Omit `board_path` to select the root, or pass kind/name pairs such as `["layers", "overview", "scenarios", "failure"]`. Scenario/step inheritance is preserved. Limits include 256 KiB combined source, 32 files, 32 boards including root, 1000 objects and 2000 connections across all boards, two simultaneous operations, and a cooperative timeout. Asset limits include 32 distinct images, 1 MiB each, 8 MiB combined input, 1024 pixels per side, and 8 million combined decoded pixels. Repeated SVG assets have an 8 MiB expansion budget. Reduce diagrams after `limit_exceeded`; retry `busy` errors later. Tool errors have `isError: true` plus a structured error code and located diagnostics when available.
 
 HTTP calls do not depend on prior sessions. Carry source/options explicitly. If an integrator configures the optional store, retain and pass `document_id` and `revision`; arbitrary tool metadata is not automatically round-tripped by clients. IDs only work with the same shared store and authorization policy.
 

@@ -47,6 +47,7 @@ func exerciseClient(t *testing.T, transport mcp.Transport, version string) {
 		{"render-d2", map[string]any{"code": "a -> b", "format": "png", "layout": "elk"}, false},
 		{"render-d2", map[string]any{"code": "a -> b", "format": "svg", "layout": "tala"}, false},
 		{"render-d2", map[string]any{"code": "a -> b", "format": "ascii"}, false},
+		{"render-d2", map[string]any{"code": "root\nlayers: {child: {a -> b}}", "board_path": []string{"layers", "child"}, "format": "svg"}, false},
 		{"fetch_d2_cheat_sheet", map[string]any{}, false},
 	} {
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: tc.name, Arguments: tc.args})

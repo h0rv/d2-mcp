@@ -121,9 +121,12 @@ func (a *application) source(args toolArgs) (d2.Source, error) {
 	return d2.Source{Code: code, Path: name, FS: snapshot}, nil
 }
 
-func (a *application) writeArtifact(name, format string, data []byte) (string, error) {
+func (a *application) writeArtifact(name, format string, data []byte, overwrite bool) (string, error) {
 	if a.output == nil {
 		return "", errors.New("artifact writes require --output-dir")
+	}
+	if overwrite && (!a.config.AllowOverwrite || name == "") {
+		return "", errors.New("overwrite requires --allow-overwrite and an explicit output_name")
 	}
 	ext := "." + format
 	if format == "ascii" {
@@ -134,6 +137,30 @@ func (a *application) writeArtifact(name, format string, data []byte) (string, e
 	}
 	if !fs.ValidPath(name) || filepath.Base(name) != name || len(name) > 200 || filepath.Ext(name) != ext {
 		return "", fmt.Errorf("output_name must be a filename ending in %s, with no directories", ext)
+	}
+	if overwrite {
+		if info, err := a.output.Lstat(name); err == nil && !info.Mode().IsRegular() {
+			return "", errors.New("overwrite target must be a regular file, never a symlink or directory")
+		} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return "", errors.New("cannot inspect overwrite target")
+		}
+		// Replace the directory entry, never truncate through an existing symlink
+		// or hard link. A concurrent target swap cannot redirect this rooted rename.
+		temp := ".d2-mcp-" + rand.Text() + ".tmp"
+		f, err := a.output.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			return "", errors.New("cannot create temporary artifact")
+		}
+		defer a.output.Remove(temp)
+		_, writeErr := f.Write(data)
+		closeErr := f.Close()
+		if errors.Join(writeErr, closeErr) != nil {
+			return "", errors.New("failed to write artifact")
+		}
+		if err := a.output.Rename(temp, name); err != nil {
+			return "", errors.New("failed to replace artifact")
+		}
+		return filepath.Join(a.outputPath, name), nil
 	}
 	// O_EXCL also refuses existing symlinks; inputs and existing artifacts are
 	// never overwritten. A failed write removes only the file this call created.
