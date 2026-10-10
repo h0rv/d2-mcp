@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import shutil
 import socket
 import subprocess
 import sys
@@ -53,7 +54,52 @@ class PackagingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             build.endpoint(args, {})
         args.url, args.local_command = None, sys.executable
-        self.assertEqual(build.endpoint(args, {"remote_url": None})["args"], args.server_arg)
+        self.assertEqual(build.endpoint(args, {"remote_url": None})["args"], ["--transport", "stdio", *args.server_arg])
+        for flags in [["--transport", "http"], ["--transport=http"], ["-transport", "http"], ["-transport=http"], ["--sse"], ["--sse=true"], ["-sse"], ["-sse=true"], ["-t=http"], ["--t=http"], ["-t", "http"]]:
+            args.server_arg = flags
+            with self.assertRaisesRegex(ValueError, "require stdio"):
+                build.endpoint(args, {"remote_url": None})
+
+    def test_static_github_package_is_self_contained(self):
+        root = build.ROOT.parent
+        plugin = build.ROOT / "package"
+        for relative, path_key in [(".claude-plugin/marketplace.json", None), (".agents/plugins/marketplace.json", "path")]:
+            catalog = json.loads((root / relative).read_text())
+            self.assertEqual(catalog["name"], "d2-mcp")
+            entry = catalog["plugins"][0]
+            source = entry["source"][path_key] if path_key else entry["source"]
+            self.assertEqual((root / source).resolve(), plugin)
+            self.assertEqual(entry["name"], json.loads((plugin / "plugin.json").read_text())["name"])
+        for relative in [".claude-plugin/plugin.json", ".codex-plugin/plugin.json"]:
+            manifest = json.loads((plugin / relative).read_text())
+            self.assertNotIn("hooks", manifest)
+            for key in ["commands", "skills", "mcpServers"]:
+                if key in manifest:
+                    self.assertTrue((plugin / manifest[key]).exists())
+        expected = {"type": "stdio", "command": "d2-mcp", "args": ["--transport", "stdio"]}
+        for relative in [".mcp.json", "mcp.json"]:
+            self.assertEqual(json.loads((plugin / relative).read_text())["mcpServers"], {"d2": expected})
+        pi = json.loads((root / "package.json").read_text())
+        self.assertTrue(pi["private"])
+        self.assertNotIn("scripts", pi)
+        self.assertNotIn("dependencies", pi)
+        for kind in ["skills", "prompts"]:
+            self.assertEqual([(root / path).resolve() for path in pi["pi"][kind]], [plugin / kind])
+        with tempfile.TemporaryDirectory() as temp:
+            generated = build.build(Path(temp) / "bundle", expected)
+            for relative in [".claude-plugin/plugin.json", ".codex-plugin/plugin.json", "mcp.json", ".mcp.json"]:
+                self.assertEqual((generated / relative).read_bytes(), (plugin / relative).read_bytes())
+
+    def test_hostname_is_consistent_across_clients(self):
+        for url in ["https://bad\\host/mcp", "https://bad%00host/mcp", "https://ho|st/mcp", "https://exa^mple/mcp", "https://exa<mple/mcp", "https://[::1%25eth0]/mcp", "https://faß.de/mcp", "https://.host/mcp", "https://host../mcp", "https://999.999.999.999/mcp", "https://127.1/mcp", "https://example.123/mcp", "https://0xfffffffff/mcp", "https://xn--a.test/mcp"]:
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                args = arguments()
+                args.url = url
+                build.endpoint(args, {})
+        for url in ["https://xn--fa-hia.de/日本語", "https://example.test/mcp", "http://localhost:8080/mcp", "http://127.0.0.1:8080/mcp", "http://[::1]:8080/mcp"]:
+            args = arguments()
+            args.url = url
+            self.assertEqual(build.endpoint(args, {})["url"], url)
 
     def test_missing_binary_is_actionable(self):
         args = arguments()
@@ -77,6 +123,7 @@ class PackagingTests(unittest.TestCase):
     def test_generated_packages_and_config_agree(self):
         servers = [
             {"type": "stdio", "command": "/binary path/📊/d2-mcp", "args": ["--input-dir", "/some path/日本語/📊"]},
+            {"type": "stdio", "command": "/binary\x7f/d2-mcp", "args": ["--input-dir", "/some\x7fpath"]},
             {"type": "streamable-http", "url": "http://127.0.0.1:8080/mcp"},
         ]
         for server in servers:
@@ -115,47 +162,63 @@ class PackagingTests(unittest.TestCase):
             args.local_command = os.environ["D2_MCP_TEST_BINARY"]
             plugin = build.build(Path(temp) / "bundle", build.endpoint(args, {"remote_url": None}))
             config = json.loads((plugin / ".mcp.json").read_text())["mcpServers"]["d2"]
-            process = subprocess.Popen([config["command"], *config["args"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-            responses = queue.Queue()
-            def read():
-                for line in process.stdout:
-                    responses.put(line)
-            reader = threading.Thread(target=read, daemon=True)
-            reader.start()
-            def send(method, params, request_id=None):
-                message = {"jsonrpc": "2.0", "method": method, "params": params}
-                if request_id is not None:
-                    message["id"] = request_id
-                process.stdin.write(json.dumps(message) + "\n")
-                process.stdin.flush()
-                if request_id is not None:
-                    result = json.loads(responses.get(timeout=15))
-                    self.assertEqual(result["id"], request_id)
-                    self.assertNotIn("error", result)
-                    return result["result"]
+            self.assert_stdio_source_to_artifact(config, temp, os.environ.copy())
+
+    @unittest.skipUnless(os.environ.get("D2_MCP_TEST_BINARY"), "Set D2_MCP_TEST_BINARY for a static package handshake")
+    def test_static_package_outside_checkout_source_to_artifact(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            plugin = root / "plugin"
+            shutil.copytree(build.ROOT / "package", plugin)
+            (root / "bin").mkdir()
+            shutil.copyfile(os.environ["D2_MCP_TEST_BINARY"], root / "bin/d2-mcp")
+            (root / "bin/d2-mcp").chmod(0o755)
+            config = json.loads((plugin / "mcp.json").read_text())["mcpServers"]["d2"]
+            environment = {**os.environ, "PATH": str(root / "bin") + os.pathsep + os.environ["PATH"], "MCP_TRANSPORT": "http", "SSE_MODE": "true"}
+            self.assert_stdio_source_to_artifact(config, root, environment)
+
+    def assert_stdio_source_to_artifact(self, config, cwd, environment):
+        process = subprocess.Popen([config["command"], *config["args"]], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=cwd, env=environment)
+        responses = queue.Queue()
+        def read():
+            for line in process.stdout:
+                responses.put(line)
+        reader = threading.Thread(target=read, daemon=True)
+        reader.start()
+        def send(method, params, request_id=None):
+            message = {"jsonrpc": "2.0", "method": method, "params": params}
+            if request_id is not None:
+                message["id"] = request_id
+            process.stdin.write(json.dumps(message) + "\n")
+            process.stdin.flush()
+            if request_id is not None:
+                result = json.loads(responses.get(timeout=15))
+                self.assertEqual(result["id"], request_id)
+                self.assertNotIn("error", result)
+                return result["result"]
+        try:
+            send("initialize", {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "package-test", "version": "1"}}, 1)
+            send("notifications/initialized", {})
+            listed = send("tools/list", {}, 2)
+            self.assertEqual({tool["name"] for tool in listed["tools"]}, {"compile-d2", "render-d2", "fetch_d2_cheat_sheet"})
+            source = "direction: right\nclient -> api -> database\ndatabase.shape: cylinder"
+            for request_id, tool in [(3, "compile-d2"), (4, "render-d2")]:
+                inputs = {"code": source, "layout": "tala"}
+                if tool == "render-d2":
+                    inputs["format"] = "svg"
+                result = send("tools/call", {"name": tool, "arguments": inputs}, request_id)
+                self.assertFalse(result.get("isError"), result)
+                if tool == "render-d2":
+                    self.assertTrue(any("<svg" in item.get("resource", {}).get("text", "") for item in result["content"]))
+        finally:
+            process.stdin.close()
             try:
-                send("initialize", {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "package-test", "version": "1"}}, 1)
-                send("notifications/initialized", {})
-                listed = send("tools/list", {}, 2)
-                self.assertEqual({tool["name"] for tool in listed["tools"]}, {"compile-d2", "render-d2", "fetch_d2_cheat_sheet"})
-                source = "direction: right\nclient -> api -> database\ndatabase.shape: cylinder"
-                for request_id, tool in [(3, "compile-d2"), (4, "render-d2")]:
-                    inputs = {"code": source, "layout": "tala"}
-                    if tool == "render-d2":
-                        inputs["format"] = "svg"
-                    result = send("tools/call", {"name": tool, "arguments": inputs}, request_id)
-                    self.assertFalse(result.get("isError"), result)
-                    if tool == "render-d2":
-                        self.assertTrue(any("<svg" in item.get("resource", {}).get("text", "") for item in result["content"]))
-            finally:
-                process.stdin.close()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-                reader.join(timeout=5)
-                process.stdout.close()
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            reader.join(timeout=5)
+            process.stdout.close()
 
     @unittest.skipUnless(os.environ.get("D2_MCP_TEST_BINARY"), "Set D2_MCP_TEST_BINARY for a real HTTP handshake")
     def test_packaged_http_source_to_artifact(self):

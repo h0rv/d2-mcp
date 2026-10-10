@@ -2,10 +2,13 @@
 """Build local client packages without modifying client settings or contacting a server."""
 
 import argparse
+import ipaddress
 import json
 import os
 from pathlib import Path
 import shutil
+import re
+import unicodedata
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent
@@ -18,8 +21,8 @@ def endpoint(args, defaults):
         raise ValueError("--url must be your non-empty MCP endpoint")
     remote = args.url or os.environ.get("D2_MCP_URL") or defaults["remote_url"]
     if args.local_command is None and remote:
-        if any(ord(character) <= 32 or ord(character) == 127 for character in remote):
-            raise ValueError("MCP URLs cannot contain whitespace or control characters")
+        if "\\" in remote or any(ord(character) <= 32 or ord(character) == 127 for character in remote):
+            raise ValueError("MCP URLs cannot contain backslashes, whitespace, or control characters")
         parsed = urlsplit(remote)
         # Accessing .port validates both the integer and its range.
         parsed.port
@@ -27,6 +30,27 @@ def endpoint(args, defaults):
             parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
         )) or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment:
             raise ValueError("Use an HTTPS MCP URL (HTTP is allowed only on loopback), without credentials, query strings, or fragments")
+        hostname = parsed.hostname
+        if not hostname.isascii() or "%" in hostname:
+            raise ValueError("Use an ASCII DNS/punycode hostname or an unscoped IP address")
+        try:
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            labels = hostname.removesuffix(".").split(".")
+            if len(hostname) > 253 or any(not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label) for label in labels):
+                raise ValueError("Invalid MCP endpoint hostname")
+            if re.fullmatch(r"[0-9]+|0[xX][0-9a-fA-F]+", labels[-1]):
+                raise ValueError("Use canonical dotted-decimal IPv4 addresses")
+            for label in labels:
+                if label.lower().startswith("xn--"):
+                    try:
+                        decoded = label[4:].encode("ascii").decode("punycode")
+                    except UnicodeError as error:
+                        raise ValueError("Invalid punycode hostname") from error
+                    # Conservative IDN subset without platform-dependent IDNA
+                    # normalization. Preserve common letter/digit domains.
+                    if not decoded or unicodedata.category(decoded[0]).startswith("M") or any(c != "-" and unicodedata.category(c)[0] not in "LMN" for c in decoded):
+                        raise ValueError("Unsupported punycode hostname")
         if args.server_arg:
             raise ValueError("--server-arg applies only to a local command")
         return {"type": "streamable-http", "url": remote}
@@ -34,12 +58,20 @@ def endpoint(args, defaults):
     resolved = shutil.which(command)
     if resolved is None:
         raise ValueError(f"Local binary not found/executable: {command}; build it first or pass --url")
-    return {"type": "stdio", "command": str(Path(resolved).resolve()), "args": args.server_arg}
+    if any(argument.startswith("-") and argument.split("=", 1)[0].lstrip("-") in {"transport", "t", "sse"} for argument in args.server_arg):
+        raise ValueError("Local client packages require stdio; use --url for an HTTP server")
+    return {"type": "stdio", "command": str(Path(resolved).resolve()), "args": ["--transport", "stdio", *args.server_arg]}
 
 
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def toml_value(value):
+    # TOML also forbids literal DEL; JSON only escapes the C0 controls. Keep
+    # non-BMP characters literal, because TOML rejects JSON surrogate pairs.
+    return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
 
 
 def build(destination, server):
@@ -53,13 +85,6 @@ def build(destination, server):
     shutil.copytree(source, plugin)
     shutil.copyfile(ROOT.parent / "LICENSE", plugin / "LICENSE")
     metadata = json.loads((plugin / "plugin.json").read_text(encoding="utf-8"))
-    compatible = {key: value for key, value in metadata.items() if key != "$schema"}
-    compatible["commands"] = "./prompts/"
-    write_json(plugin / ".claude-plugin" / "plugin.json", compatible)
-    # Supported fallback for Codex clients predating root Agent Plugins manifests.
-    codex = {key: value for key, value in compatible.items() if key != "commands"}
-    codex.update({"skills": "./skills/", "mcpServers": "./.mcp.json"})
-    write_json(plugin / ".codex-plugin" / "plugin.json", codex)
     write_json(plugin / "mcp.json", {"$schema": SCHEMA + "mcp.schema.json", "mcpServers": {"d2": server}})
     legacy = dict(server)
     if legacy["type"] == "streamable-http":
@@ -85,9 +110,9 @@ def build(destination, server):
     # JSON strings/arrays are also valid TOML basic strings/arrays for these values.
     config = '[mcp_servers.d2]\n'
     if "url" in server:
-        config += "url = " + json.dumps(server["url"], ensure_ascii=False) + "\n"
+        config += "url = " + toml_value(server["url"]) + "\n"
     else:
-        config += "command = " + json.dumps(server["command"], ensure_ascii=False) + "\nargs = " + json.dumps(server["args"], ensure_ascii=False) + "\n"
+        config += "command = " + toml_value(server["command"]) + "\nargs = " + toml_value(server["args"]) + "\n"
     (configs / "codex.toml").write_text(config, encoding="utf-8")
     return plugin
 

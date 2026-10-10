@@ -21,7 +21,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const version = "1.3.0-dev"
+var version = "1.3.0-dev"
 const maxRequestBytes = 2 << 20
 
 func (a *application) server() *mcp.Server {

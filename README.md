@@ -6,19 +6,16 @@ This branch uses **D2 0.9.0**, **Go 1.27.2**, and the official **Go MCP SDK 1.8.
 
 ## Install
 
-Download the binary matching your platform from [Releases](https://github.com/h0rv/d2-mcp/releases). Published releases may predate this refresh; the features below describe this branch. For example, with GitHub CLI on Linux amd64:
+**No source checkout or compiler is needed.** Use a prebuilt executable from
+[Releases](https://github.com/h0rv/d2-mcp/releases), verify its checksum, and point
+your MCP client at it. The [short installation guide](docs/installation.md)
+includes a pinned download and the standalone installer prepared for the next
+release. The installer selects your platform, verifies the binary, and prints
+client configuration without editing existing settings.
 
-```sh
-gh release download --repo h0rv/d2-mcp --pattern d2-mcp-linux-amd64
-chmod +x d2-mcp-linux-amd64
-./d2-mcp-linux-amd64 --help
-```
-
-Once released, install the latest version with Go:
-
-```sh
-go install github.com/h0rv/d2-mcp@latest
-```
+Published `1.2.0` predates this refresh and still needs an external converter for
+PNG. Native PNG and the direct GitHub agent packages below become generally
+available after a new release; this PR does not publish one.
 
 To build the checked-out source with Go 1.27.2 or newer:
 
@@ -29,15 +26,14 @@ go build -o d2-mcp .
 
 ### Agent skills and plugins
 
-Generate a local package with the shared D2 skill, diagram/validation prompts, and client-specific MCP configuration:
+Install optional skills and prompts through the clients' native GitHub package
+mechanisms. Follow the [Claude Code, Codex, and Pi guide](docs/agent-installation.md).
+Basic setup uses the installed `d2-mcp` command and needs no cloned repository or
+package-generation step. For a deployed remote server, configure its MCP URL
+directly. No hosted endpoint is assumed.
 
-```sh
-python3 agents/build.py --local-command "$PWD/d2-mcp" --output ./agents/build/local
-```
-
-Follow the short [Claude Code, Codex, and Pi install guide](docs/agent-installation.md) for that bundle. Python 3.11+ is needed only for generation. Setup does not modify existing client settings or install a state backend.
-
-For an endpoint you operate, use `python3 agents/build.py --url "$D2_MCP_URL" --output ./agents/build/remote`. No hosted endpoint is assumed. After an authorized, verified deployment, maintainers can set the single default in `agents/defaults.json` to make newly generated packages prefer remote; explicit local setup remains available.
+The repository's Python package generator remains available for maintainers and
+custom paths/endpoints; it is not required for normal installation.
 
 ## Clients and transports
 

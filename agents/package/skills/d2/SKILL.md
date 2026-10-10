@@ -7,6 +7,8 @@ description: Create, validate, render, or revise D2 diagrams using d2-mcp. Use f
 
 Use the connected d2-mcp tools. If they are unavailable, explain that the MCP connection must be installed; do not claim a diagram was rendered. Discover `compile-d2`, `render-d2`, and `fetch_d2_cheat_sheet`; clients may add a prefix or normalize hyphens to underscores.
 
+Inspect the advertised tool schemas before selecting options. This workflow targets the refreshed server; older releases may lack layout choices, structured diagnostics, or native PNG. If a requested feature is unavailable, explain the version limitation and use only options the connected server advertises.
+
 1. Identify the audience, relationships, and requested artifact. Infer reasonable layout choices from the task; ask only for missing facts that change the diagram.
 2. Read `fetch_d2_cheat_sheet` when syntax or supported features are uncertain. Write the complete D2 source. Keep labels short, group related nodes, and make arrow direction meaningful. Start with `dagre`; try `elk` for dense hierarchies or `tala` when its layout improves readability.
 3. Call `compile-d2` with `code` and the intended layout/options. Read `isError` and `structuredContent.error`, including one-based diagnostic locations. Fix the source and validate again. Do not retry unchanged invalid input or silently remove requested content.

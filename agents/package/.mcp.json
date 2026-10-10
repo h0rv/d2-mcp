@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "d2": {
+      "type": "stdio",
+      "command": "d2-mcp",
+      "args": [
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}

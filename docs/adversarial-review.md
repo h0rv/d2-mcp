@@ -31,6 +31,17 @@ legends, and imported diagrams were checked for compatibility. The
 [compatibility notes](compatibility.md) explain the deliberately narrower source
 subset and format/transport changes.
 
+The subsequent installation pass added a standalone verified-release installer
+and direct GitHub client manifests. An independent reviewer copied the installer
+outside the checkout, installed the actual 1.2.0 Linux asset using its pinned
+SHA-256, and ran its help command. A locally built refreshed binary was also
+installed through a controlled download fixture, then used for real MCP
+validation and PNG rendering. Corruption, truncation, interrupted downloads,
+concurrent destination creation, symlinks, metadata errors, and unsupported
+platforms were checked. Fresh Claude and Pi fixture installs loaded the package
+and connected to MCP; the PR records the subsequent GitHub delivery check.
+The new packages explicitly select stdio despite ambient transport variables.
+
 ## Remaining limits
 
 Admission checks are estimates, not preemptive CPU/memory isolation. D2 parsing,
