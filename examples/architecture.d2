@@ -1,0 +1,6 @@
+direction: right
+client: Client
+api: API service
+db: Database {shape: cylinder}
+client -> api: HTTPS
+api -> db: query

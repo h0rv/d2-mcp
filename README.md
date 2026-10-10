@@ -1,247 +1,210 @@
 # d2-mcp
 
-A Model Context Protocol (MCP) server for working with [D2: Declarative Diagramming](https://d2lang.com/), enabling seamless integration of diagram creation and validation into your development workflow.
+A small Go MCP server for validating and rendering [D2](https://d2lang.com/) diagrams. Send complete source and rendering options; receive PNG, SVG, or text. The default server keeps no documents, artifacts, or HTTP sessions. It needs no D2 executable, browser, or PNG converter.
 
-**Tools:**
-
-* Compile D2 Code
-    * Validate D2 syntax and catch errors before rendering
-    * Get immediate feedback on diagram structure and syntax
-    * Accepts either direct code or file path to D2 file
-* Render Diagrams
-    * Generate diagrams for visual feedback and refinement
-    * Support PNG, SVG, and ASCII output formats
-    * Accepts either direct code or file path to D2 file
-* Fetch D2 Cheat Sheet
-    * Returns a Markdown reference covering shapes, styling, and transport usage
+This branch uses **D2 0.9.0**, **Go 1.27.2**, and the official **Go MCP SDK 1.8.0**. D2's Dagre, ELK, and open-source TALA layouts are bundled. See [compatibility changes](#compatibility-with-12) before upgrading from 1.2.
 
 ## Install
 
-### Option 1: Install Binary Release
+Download the binary matching your platform from [Releases](https://github.com/h0rv/d2-mcp/releases). Published releases may predate this refresh; the features below describe this branch. For example, with GitHub CLI on Linux amd64:
 
-```bash
+```sh
+gh release download --repo h0rv/d2-mcp --pattern d2-mcp-linux-amd64
+chmod +x d2-mcp-linux-amd64
+./d2-mcp-linux-amd64 --help
 ```
 
-### Option 2: Install via `go`
+Once released, install the latest version with Go:
 
-```bash
+```sh
 go install github.com/h0rv/d2-mcp@latest
 ```
 
-### Option 3: Build Locally
+To build the checked-out source with Go 1.27.2 or newer:
 
-```bash
-git clone https://github.com/h0rv/d2-mcp.git
-cd d2-mcp
-go build .
+```sh
+go build -o d2-mcp .
+./d2-mcp --version
 ```
 
-### Option 4: Build Image Locally
+## Clients and transports
 
-```bash
-docker build . -t d2-mcp
+Stdio remains the default. For Claude Desktop or another client using `mcpServers`:
 
-# Run in stdio mode (default - for MCP clients)
+```json
+{
+  "mcpServers": {
+    "d2": {
+      "command": "/absolute/path/d2-mcp",
+      "args": ["--image-type", "png"]
+    }
+  }
+}
+```
+
+For a stateless Streamable HTTP endpoint:
+
+```sh
+./d2-mcp --transport http --host 127.0.0.1 --port 8080
+```
+
+Connect a Streamable HTTP MCP client to `http://127.0.0.1:8080/mcp`. For example, a VS Code `.vscode/mcp.json` entry:
+
+```json
+{
+  "servers": {
+    "d2": {"type": "http", "url": "http://127.0.0.1:8080/mcp"}
+  }
+}
+```
+
+HTTP uses JSON responses, no session ID, and no background event stream. Every call carries its source/options; subsequent calls may go to another replica. GET/DELETE on `/mcp` return 405. Current MCP `2026-07-28` discovery and legacy initialization are handled by the SDK; integration tests cover `2025-03-26`, `2025-06-18`, `2025-11-25`, and `2026-07-28` over HTTP. Stdio and legacy SSE retain their supported initialization protocols.
+
+Legacy SSE remains available at `/sse` with `--transport sse` (or `--sse`). Its SDK-managed connections are stateful and need a stable server connection. Prefer HTTP for new integrations. `MCP_TRANSPORT`, `PORT`, and legacy `SSE_MODE`/`SSE_PORT` are still accepted; explicit transport/port flags take precedence, and `--sse` selects SSE.
+
+HTTP binds to loopback by default, rejects cross-origin browser requests, and retains the SDK's localhost/DNS-rebinding protection. There is no built-in authentication or multi-user authorization. If exposing it beyond a trusted local environment, supply authentication, TLS, request limits, and process resource limits in your deployment. No public hosting is configured by this repository.
+
+## Tools
+
+- `compile-d2`: validate syntax, semantics, layout, and server limits, with located diagnostics when available.
+- `render-d2`: render one diagram and return its artifact.
+- `fetch_d2_cheat_sheet`: retrieve the bundled reference and supported subset.
+
+Both diagram tools require **exactly one** of `code` or `file_path`. `file_path` is a relative `.d2` path inside an explicitly configured `--input-dir`; it refers to the **server's** filesystem. Agents without local files should send `code`. Input is never fetched from a URL.
+
+Example `tools/call` parameters:
+
+```json
+{
+  "name": "render-d2",
+  "arguments": {
+    "code": "direction: right\nclient -> api -> database\ndatabase.shape: cylinder",
+    "layout": "tala",
+    "format": "png",
+    "theme_id": 0,
+    "sketch": false,
+    "padding": 40,
+    "scale": 1
+  }
+}
+```
+
+| Argument | Behavior |
+| --- | --- |
+| `layout` | `dagre`, `elk`, or `tala` |
+| `theme_id` | Built-in D2 theme ID, e.g. 0 (neutral), 1 (gray), 6 (GrapeSoda) |
+| `dark_theme_id` | Optional SVG dark theme; PNG rejects this option |
+| `sketch` | Boolean; explicit `false` is honored |
+| `padding` | Integer 0–1000; explicit zero is honored |
+| `scale` | Number 0.1–4 for SVG/PNG; ASCII uses its own character grid |
+| `center` | Boolean controlling SVG/PNG centering |
+| `format` | Render only: `png` (default), `svg`, `ascii` |
+| `ascii_mode` | Render only: `extended` or `standard` connectors; labels retain their source characters |
+| `output_name` | Render only, with `--output-dir`: new `.png`, `.svg`, or `.txt` filename, without directories |
+
+Explicit options override `vars: {d2-config: {...}}` source settings. Otherwise D2's defaults apply: Dagre, neutral theme 0, no sketch, padding 100. Source layout settings are respected. ASCII supports the selected layout but does not show colors, sketch strokes, or other image-only styles.
+
+### Results and errors
+
+PNG uses standard MCP image content with `image/png`. SVG uses an embedded text resource with `image/svg+xml`, so clients can save the original XML; its `urn:sha256:...` URI identifies the returned bytes and is not a persistent download endpoint. ASCII uses text content. `structuredContent` includes `status`, effective layout/theme/sketch/padding, and artifact MIME type, byte size, SHA-256, and URI. No base64 payload is duplicated in structured output.
+
+Tool failures return `isError: true`, a readable text explanation, and:
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "invalid_d2",
+    "message": "input.d2:1:4: ...",
+    "diagnostics": [{"path": "input.d2", "line": 1, "column": 4, "message": "..."}]
+  }
+}
+```
+
+Diagnostics use one-based lines and columns. Other codes include `invalid_arguments`, `unsupported_feature`, `limit_exceeded`, `cancelled`, `busy`, `write_failed`, and `render_failed`. Protocol errors such as an unknown tool remain SDK protocol errors. Native renderer failures are surfaced without silently switching format.
+
+### Files and artifacts
+
+Local file access is opt-in. Create the directories yourself:
+
+```sh
+mkdir -p diagrams artifacts
+./d2-mcp --input-dir ./diagrams --output-dir ./artifacts
+```
+
+A request with `file_path: "architecture.d2"` may import other `.d2` files within that root. Inline source may also import from that root when configured. Absolute paths, `..` escapes, and symlinks escaping the root are rejected. Sources are snapshotted per call so validation and layout see the same imported bytes.
+
+Without `output_name`, results stay inline. To save a local artifact, include `output_name: "architecture.svg"` and `format: "svg"`. Files are created with exclusive creation and private permissions; existing files and symlinks are never overwritten. The result includes the server-local path and a `file:` resource link. This server does not expose a download endpoint for those files. Use the inline artifact for a remote client, or arrange access outside this server.
+
+`--write-files --output-dir ./artifacts` retains the automatic file-output mode for `file_path` calls, now with unique filenames in the output root. It does not write next to arbitrary input paths.
+
+### Limits and supported subset
+
+The server admits at most 256 KiB of combined source, 32 source files, 1000 objects, 2000 connections, two simultaneous diagram operations, and 16 MiB per returned artifact. Layout bounds are capped at 8192 pixels per side and 16 million pixels; native PNG additionally has explicit scene, raster, asset, and work budgets. MCP input frames/bodies are capped at 2 MiB. ASCII has a separate pre-allocation ceiling of 2000 cells per side and 1 million cells, independent of image scale; legends require SVG/PNG. Calls have a cooperative 30-second timeout (`--timeout`, at most 5m). Busy calls fail immediately and can be retried.
+
+Timeouts are cooperative: parsing and some upstream work are not preemptible. These limits are useful bounds, not process isolation or a security audit. Run untrusted workloads with operating-system memory/CPU limits.
+
+Icons and image assets (remote URLs, local files, and data URLs) are rejected. Native shapes, text, Markdown labels, code, and mathematical labels remain available; D2 omits Markdown images. No rendering network access or ambient filesystem image loading is enabled. SVG links permit HTTP, HTTPS, mailto, and fragments; emitted SVG is checked for active content and external image references. Multi-board source is rejected explicitly; send one board per call. TALA seed arrays are capped at 16.
+
+## Optional document-store adapter
+
+The shipped binary has **no state backend**, no storage flags, and only the three core tools. Integrators can supply the small [`document.Store`](document/store.go) interface via `config.Store` when constructing the application in a custom build. This is an adapter seam, not a hosted database or an authentication implementation.
+
+A configured store adds `store-d2` for complete source replacement with atomic compare-and-swap, and enables `document_id` plus `revision` as an alternative input to validate/render. Create with `expected_revision: ""`; update only using the exact previous revision. The backend must return a new opaque revision for every successful write. Sources stored this way must be self-contained: server-local imports are rejected. The interface contract requires authorization from request context, bounded storage, cancellation, concurrency safety, and atomic revision checks shared across replicas.
+
+```json
+{"name":"store-d2","arguments":{"document_id":"architecture","expected_revision":"","code":"client -> api"}}
+```
+
+Retain the returned ID and revision explicitly, then send both:
+
+```json
+{"name":"render-d2","arguments":{"document_id":"architecture","revision":"RETURNED_REVISION","format":"svg"}}
+```
+
+A stale revision returns `revision_conflict`; missing IDs return `document_not_found`. Tests create a document through one application instance, render through another sharing the adapter, reject concurrent stale writes, and verify that an unrelated backend cannot resolve the handle. IDs work only across instances sharing the same backend, namespace, and authorization policy. They are not portable credentials. Sending complete `code` and options remains portable across unrelated servers supporting the same D2 version and limits.
+
+Arbitrary MCP result metadata is not automatically saved or echoed by clients. `requestState` belongs to continuation of one multi-step protocol request; it is not a document store. This server does not manufacture continuation requests or signed tokens to retain documents. Choosing a production backend and wiring authenticated request context are deployment work outside this adapter.
+
+## Docker
+
+```sh
+docker build -t d2-mcp .
 docker run --rm -i d2-mcp
-
-# Run in stdio mode with filesystem access
-docker run --rm -i -v $(pwd):/data d2-mcp
-
-# Run in SSE mode (HTTP server)
-docker run --rm -e SSE_MODE=true -p 8080:8080 d2-mcp
-
-# Run in SSE mode with filesystem access
-docker run --rm -e SSE_MODE=true -p 8080:8080 -v $(pwd):/data d2-mcp
+# Host access stays on loopback; container listener explicitly binds all interfaces.
+docker run --rm -p 127.0.0.1:8080:8080 d2-mcp --transport http --host 0.0.0.0
+# Opt-in read-only source mount:
+docker run --rm -i -v "$PWD/diagrams:/data:ro" d2-mcp --input-dir /data
 ```
 
-### Option 5: Run Container Image
+The image runs as a non-root user and includes the statically built Go server. For writable bind mounts, use `--user "$(id -u):$(id -g)"` and provision output-directory ownership. No librsvg, browser, or external layout plugin is installed.
 
-```bash
-# Run in stdio mode (default - for MCP clients)
-docker run --rm -i ghcr.io/h0rv/d2-mcp:main
+## Compatibility with 1.2
 
-# Run in stdio mode with filesystem access
-docker run --rm -i -v $(pwd):/data ghcr.io/h0rv/d2-mcp:main
+- Tool names, `code`/`file_path`, PNG default, stdio default, format overrides, and legacy transport flags remain.
+- D2 moved from `oss.terrastruct.com/d2` to `github.com/d2lang/d2`; Go 1.27.2 is required by this build. MCP moved from mark3labs to the official Go SDK.
+- Rendering now uses D2 defaults. For the old appearance request `layout: "dagre"`, `theme_id: 6`, `sketch: true`, `padding: 5`. Native PNG may differ in rasterization from librsvg.
+- PNG is always available without an external converter. SVG content changes from an MCP image to an embedded resource containing the original XML.
+- Both source arguments together are now an error. File input requires `--input-dir`; automatic file output also requires `--output-dir`. No overwrite or arbitrary absolute paths.
+- HTTP is stateless and binds loopback; specify `--host 0.0.0.0` for container networking. Legacy SSE still requires a continuous connection and uses the message URL supplied by the SDK.
+- Remote/local image assets and multi-board diagrams now return explicit unsupported-feature errors.
 
-# Run in SSE mode (HTTP server)
-docker run --rm -e SSE_MODE=true -p 8080:8080 ghcr.io/h0rv/d2-mcp:main
+### Appearance comparison
 
-# Run in SSE mode with filesystem access
-docker run --rm -e SSE_MODE=true -p 8080:8080 -v $(pwd):/data ghcr.io/h0rv/d2-mcp:main
-```
+The same [example source](examples/architecture.d2), rendered with D2 0.9.0 native PNG using the old d2-mcp settings and the new D2 defaults. This illustrates settings changes; it is not a pixel comparison with the old librsvg renderer.
 
-## Setup with MCP Client
-
-MacOS:
-
-```bash
-# Claude Desktop
-$EDITOR ~/Library/Application\ Support/Claude/claude_desktop_config.json
-# OTerm:
-$EDITOR ~/Library/Application\ Support/oterm/config.json
-```
-
-Add the `d2` MCP server to your respective MCP Clients config:
-
-**Using Binary:**
-```json
-{
-    "mcpServers": {
-        "d2": {
-            "command": "/YOUR/ABSOLUTE/PATH/d2-mcp",
-            "args": ["--image-type", "png"]
-        }
-    }
-}
-```
-
-**Using Binary with file output:**
-```json
-{
-    "mcpServers": {
-        "d2": {
-            "command": "/YOUR/ABSOLUTE/PATH/d2-mcp",
-            "args": ["--image-type", "png", "--write-files"]
-        }
-    }
-}
-```
-
-**Using Docker:**
-```json
-{
-    "mcpServers": {
-        "d2": {
-            "command": "docker",
-            "args": ["run", "--rm", "-i", "ghcr.io/h0rv/d2-mcp:main", "--image-type", "svg"]
-        }
-    }
-}
-```
-
-**Using Docker with filesystem access:**
-```json
-{
-    "mcpServers": {
-        "d2": {
-            "command": "docker",
-            "args": [
-                "run", "--rm", "-i",
-                "-v", "./:/data",
-                "ghcr.io/h0rv/d2-mcp:main",
-                "--image-type", "ascii",
-                "--ascii-mode", "standard",
-                "--write-files"
-            ]
-        }
-    }
-}
-```
-
-## Rendering Formats
-
-The server returns PNG output by default when `rsvg-convert` from librsvg is available. If `rsvg-convert` is missing, the server automatically removes `png` from the `render-d2` tool's `format` enum and falls back to SVG. The Docker image installs librsvg plus fontconfig/DejaVu fallback fonts, so PNG works out of the box there.
-
-Install librsvg for local binaries:
-
-```bash
-# macOS
-brew install librsvg
-
-# Debian/Ubuntu
-sudo apt-get install librsvg2-bin
-
-# Alpine
-apk add librsvg
-```
-
-Override globally when starting the binary:
-
-```bash
-./d2-mcp --image-type svg        # SVG output
-./d2-mcp --image-type ascii      # ASCII output with Unicode box drawing characters
-./d2-mcp --image-type ascii --ascii-mode standard  # ASCII output restricted to basic ASCII chars
-```
-
-Inside MCP tool calls, pass the optional `format` argument (`png`, `svg`, `ascii`) and, when `ascii`, the `ascii_mode` argument (`extended`, `standard`) to switch formats per request.
-
-### Docker Usage Examples
-
-Run the container with default PNG output over stdio:
-
-```bash
-docker run --rm -i ghcr.io/h0rv/d2-mcp:main
-```
-
-Switch to Unicode ASCII diagrams and capture responses as plain text:
-
-```bash
-docker run --rm -i ghcr.io/h0rv/d2-mcp:main --image-type ascii
-```
-
-Use basic ASCII characters and write rendered files back into your working tree (requires a bind mount):
-
-```bash
-docker run --rm -i \
-  -v "$(pwd)":/data \
-  ghcr.io/h0rv/d2-mcp:main \
-  --image-type ascii \
-  --ascii-mode standard \
-  --write-files
-```
-
-Expose the SSE server on port 8080 while emitting SVG:
-
-```bash
-docker run --rm -e SSE_MODE=true -p 8080:8080 ghcr.io/h0rv/d2-mcp:main --image-type svg
-```
-
-Expose the streamable HTTP transport (default endpoint `/mcp`) for use with MCP clients that expect the new protocol:
-
-```bash
-docker run --rm -p 8080:8080 ghcr.io/h0rv/d2-mcp:main --transport http --image-type svg
-```
-
-### Cheat Sheet Tool
-
-Retrieve the built-in quick reference as Markdown:
-
-```json
-{
-  "tool": "fetch_d2_cheat_sheet"
-}
-```
-
-The cheat sheet highlights common shapes, layout tips, and ASCII-friendly patterns, making it ideal support material for downstream LLM prompts.
-
-## Transports
-
-The server defaults to stdio transport for CLI-driven MCP clients. Switch transports per run:
-
-- `--transport stdio`: default for local CLI integrations.
-- `--transport sse`: legacy Server-Sent Events transport (alias: `--sse`).
-- `--transport http`: streamable HTTP transport on `/mcp`; combine with `-p`/`--port` when running in Docker or containers.
-
-Environment overrides:
-
-- `MCP_TRANSPORT` sets the transport (`stdio`, `sse`, `http`) when flags are not provided.
-- `PORT` (or the legacy `SSE_PORT`) sets the listening port for SSE/HTTP transports.
-- `SSE_MODE=true` retains backwards compatibility by selecting the SSE transport.
-
-## Tool Reference
-
-| Tool | Description | Key Arguments |
-| ---- | ----------- | ------------- |
-| `compile-d2` | Validates D2 source and surfaces syntax errors. | `code` (string) or `file_path` (string) |
-| `render-d2` | Renders diagrams to PNG, SVG, or ASCII (ASCII is LLM-friendly). | `code`/`file_path`, `format` (`png`, `svg`, `ascii`), `ascii_mode` (`extended`, `standard`) |
-| `fetch_d2_cheat_sheet` | Returns a Markdown cheat sheet with examples and best practices. | _None_ |
-
-Tip: Run `compile-d2` first to validate, then call `render-d2` with the same payload for the final output.
+| Previous appearance settings | Current defaults |
+| --- | --- |
+| ![GrapeSoda, sketch, padding 5](docs/images/legacy-settings.png) | ![Neutral theme, no sketch, padding 100](docs/images/current-default.png) |
 
 ## Development
 
-### Debugging
-
-```bash
-npx @modelcontextprotocol/inspector /YOUR/ABSOLUTE/PATH/d2-mcp/d2-mcp
+```sh
+go test ./...
+go test -race ./...
+go vet ./...
+go build ./...
+npx @modelcontextprotocol/inspector ./d2-mcp
 ```
+
+Tests decode real native PNGs, check SVG/ASCII, exercise all three layouts, source configuration and explicit overrides, rooted imports and safe file creation, structured failures, concurrent rendering, stateless HTTP across instances, current/legacy MCP negotiation, SSE, a real stdio subprocess, and the optional storage adapter. CI builds release target platforms without publishing them on pull requests.

@@ -1,207 +1,288 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"image/png"
+	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	d2 "github.com/h0rv/d2-mcp/d2"
-
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/d2lang/d2/d2parser"
+	"github.com/h0rv/d2-mcp/d2"
+	"github.com/h0rv/d2-mcp/document"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// getArguments safely returns request arguments as a map, decoding JSON when needed.
-func getArguments(request mcp.CallToolRequest) map[string]any {
-	if args := request.GetArguments(); args != nil {
-		return args
-	}
-
-	var decoded map[string]any
-	if err := request.BindArguments(&decoded); err == nil && decoded != nil {
-		return decoded
-	}
-
-	return map[string]any{}
+type config struct {
+	Format, ASCIIMode, InputDir, OutputDir string
+	WriteFiles                             bool
+	Timeout                                time.Duration
+	Store                                  document.Store
+}
+type application struct {
+	config        config
+	input, output *os.Root
+	outputPath    string
+	slots         chan struct{}
 }
 
-// getCodeFromRequest extracts D2 code from either the "code" parameter or by reading from "file_path"
-func getCodeFromArgs(args map[string]any) (string, error) {
-	// Check if code is provided directly
-	if code, ok := args["code"].(string); ok && code != "" {
-		return code, nil
+func newApplication(c config) (*application, error) {
+	if c.Format != "png" && c.Format != "svg" && c.Format != "ascii" {
+		return nil, errors.New("image-type must be png, svg, or ascii")
 	}
-
-	// Check if file_path is provided
-	if filePath, ok := args["file_path"].(string); ok && filePath != "" {
-		content, err := os.ReadFile(filePath)
+	if c.ASCIIMode != "extended" && c.ASCIIMode != "standard" {
+		return nil, errors.New("ascii-mode must be extended or standard")
+	}
+	if c.Timeout <= 0 || c.Timeout > 5*time.Minute {
+		return nil, errors.New("timeout must be positive and at most 5m")
+	}
+	if c.WriteFiles && c.OutputDir == "" {
+		return nil, errors.New("--write-files requires --output-dir")
+	}
+	a := &application{config: c, slots: make(chan struct{}, 2)}
+	var err error
+	if c.InputDir != "" {
+		a.input, err = os.OpenRoot(c.InputDir)
 		if err != nil {
-			return "", errors.New("failed to read file: " + err.Error())
+			return nil, err
 		}
-		return string(content), nil
 	}
-
-	return "", errors.New("either 'code' or 'file_path' parameter must be provided")
+	if c.OutputDir != "" {
+		a.outputPath, err = filepath.Abs(c.OutputDir)
+		if err == nil {
+			a.output, err = os.OpenRoot(a.outputPath)
+		}
+		if err != nil {
+			a.Close()
+			return nil, err
+		}
+	}
+	return a, nil
+}
+func (a *application) Close() {
+	if a.input != nil {
+		a.input.Close()
+	}
+	if a.output != nil {
+		a.output.Close()
+	}
 }
 
-// generateOutputFilename creates an output filename based on input filename and requested format
-func generateOutputFilename(inputPath, format string) string {
-	dir := filepath.Dir(inputPath)
-	base := filepath.Base(inputPath)
+type toolArgs struct {
+	Code       *string `json:"code,omitempty"`
+	DocumentID string  `json:"document_id,omitempty"`
+	Revision   string  `json:"revision,omitempty"`
+	FilePath   *string `json:"file_path,omitempty"`
+	Format     string  `json:"format,omitempty"`
+	ASCIIMode  string  `json:"ascii_mode,omitempty"`
+	OutputName string  `json:"output_name,omitempty"`
+	d2.Options
+}
+type diagnostic struct {
+	Path    string `json:"path"`
+	Line    int    `json:"line"`
+	Column  int    `json:"column"`
+	Message string `json:"message"`
+}
+type toolError struct {
+	Code        string       `json:"code"`
+	Message     string       `json:"message"`
+	Diagnostics []diagnostic `json:"diagnostics,omitempty"`
+}
+type artifact struct {
+	MIMEType string `json:"mime_type"`
+	Bytes    int    `json:"bytes"`
+	SHA256   string `json:"sha256"`
+	URI      string `json:"uri"`
+	Path     string `json:"path,omitempty"`
+}
 
-	// Remove .d2 extension if present
-	if strings.HasSuffix(base, ".d2") {
-		base = strings.TrimSuffix(base, ".d2")
+func errorResult(code string, err error) *mcp.CallToolResult {
+	var d2err *d2.Error
+	if errors.As(err, &d2err) {
+		code = d2err.Code
 	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		code = "cancelled"
+	}
+	detail := toolError{Code: code, Message: err.Error()}
+	var parse *d2parser.ParseError
+	if errors.As(err, &parse) {
+		detail.Code = "invalid_d2"
+		for _, e := range parse.Errors {
+			detail.Diagnostics = append(detail.Diagnostics, diagnostic{e.Range.Path, e.Range.Start.Line + 1, e.Range.Start.Column + 1, e.Message})
+		}
+	}
+	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: detail.Message}}, StructuredContent: map[string]any{"status": "error", "error": detail}}
+}
 
-	// Add appropriate extension
-	var ext string
-	switch format {
-	case "png":
-		ext = ".png"
-	case "svg":
-		ext = ".svg"
+func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest, render bool) (*mcp.CallToolResult, error) {
+	var args toolArgs
+	decoder := json.NewDecoder(bytes.NewReader(request.Params.Arguments))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil {
+		return errorResult("invalid_arguments", err), nil
+	}
+	if !render && (args.Format != "" || args.ASCIIMode != "" || args.OutputName != "") {
+		return errorResult("invalid_arguments", errors.New("format, ascii_mode, and output_name apply only to render-d2")), nil
+	}
+	format := a.config.Format
+	if args.Format != "" {
+		format = strings.ToLower(args.Format)
+	}
+	if format != "png" && format != "svg" && format != "ascii" {
+		return errorResult("invalid_arguments", errors.New("format must be png, svg, or ascii")), nil
+	}
+	mode := a.config.ASCIIMode
+	if args.ASCIIMode != "" {
+		mode = strings.ToLower(args.ASCIIMode)
+	}
+	switch mode {
 	case "ascii":
-		ext = ".txt"
+		mode = "standard"
+	case "unicode":
+		mode = "extended"
+	}
+	if mode != "standard" && mode != "extended" {
+		return errorResult("invalid_arguments", errors.New("ascii_mode must be extended or standard")), nil
+	}
+	if args.OutputName != "" && a.output == nil {
+		return errorResult("file_access_denied", errors.New("output_name requires --output-dir")), nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, a.config.Timeout)
+	defer cancel()
+	select {
+	case a.slots <- struct{}{}:
+		defer func() { <-a.slots }()
+	case <-ctx.Done():
+		return errorResult("cancelled", ctx.Err()), nil
 	default:
-		ext = "." + format
+		return errorResult("busy", errors.New("renderer is busy; retry later")), nil
 	}
-
-	return filepath.Join(dir, base+ext)
-}
-
-func CompileD2Handler(
-	ctx context.Context,
-	request mcp.CallToolRequest,
-) (*mcp.CallToolResult, error) {
-	args := getArguments(request)
-	code, err := getCodeFromArgs(args)
+	source, err := a.sourceWithDocument(ctx, args)
 	if err != nil {
-		return nil, err
+		return errorResult("invalid_arguments", err), nil
 	}
-
-	_, _, compileErr, otherErr := d2.Compile(ctx, code)
-	if otherErr != nil {
-		return nil, otherErr
-	}
-
-	if compileErr != nil {
-		return mcp.NewToolResultError(compileErr.Error()), nil
-	}
-
-	return mcp.NewToolResultText("D2 script compiled successfully"), nil
-}
-
-func RenderD2Handler(
-	ctx context.Context,
-	request mcp.CallToolRequest,
-) (*mcp.CallToolResult, error) {
-	args := getArguments(request)
-	code, err := getCodeFromArgs(args)
+	prepared, err := d2.Prepare(ctx, source, args.Options)
 	if err != nil {
-		return nil, err
+		return errorResult("invalid_d2", err), nil
 	}
-
-	format := GlobalRenderFormat
-	if formatArg, ok := args["format"].(string); ok && formatArg != "" {
-		format = strings.ToLower(formatArg)
+	settings := map[string]any{"layout": prepared.Layout, "theme_id": *prepared.Options.ThemeID, "sketch": *prepared.Options.Sketch, "padding": *prepared.Options.Pad}
+	settings["center"] = *prepared.Options.Center
+	settings["scale"] = 1.0
+	if prepared.Options.Scale != nil {
+		settings["scale"] = *prepared.Options.Scale
 	}
-
-	if _, ok := supportedFormatSet[format]; !ok {
-		return mcp.NewToolResultError(fmt.Sprintf("unsupported format: %s (supported: %s)", format, strings.Join(supportedFormats, ", "))), nil
+	if prepared.Options.DarkThemeID != nil {
+		settings["dark_theme_id"] = *prepared.Options.DarkThemeID
 	}
-
-	if format == "ascii" {
-		normalize := func(mode string) (string, error) {
-			mode = strings.TrimSpace(strings.ToLower(mode))
-			switch mode {
-			case "", "extended", "unicode":
-				return "extended", nil
-			case "standard", "ascii":
-				return "standard", nil
-			default:
-				return "", errors.New("invalid ASCII mode: " + mode)
-			}
-		}
-
-		asciiMode, err := normalize(GlobalASCIIMode)
-		if err != nil {
-			return nil, err
-		}
-
-		if modeArg, ok := args["ascii_mode"].(string); ok && modeArg != "" {
-			asciiMode, err = normalize(modeArg)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		ascii, err := d2.RenderASCII(ctx, code, asciiMode)
-		if err != nil {
-			return nil, err
-		}
-
-		if GlobalWriteFiles {
-			if filePath, ok := args["file_path"].(string); ok && filePath != "" {
-				outputPath := generateOutputFilename(filePath, format)
-				if err := os.WriteFile(outputPath, ascii, 0644); err != nil {
-					return nil, errors.New("failed to write output file: " + err.Error())
-				}
-				return mcp.NewToolResultText("D2 diagram rendered to: " + outputPath), nil
-			}
-		}
-
-		return mcp.NewToolResultText(string(ascii)), nil
+	if !render {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "D2 script compiled successfully"}}, StructuredContent: map[string]any{"status": "ok", "valid": true, "options": settings}}, nil
 	}
-
-	svg, err := d2.Render(ctx, code)
+	data, err := d2.Render(ctx, prepared, format, mode)
 	if err != nil {
-		return nil, err
+		return errorResult("render_failed", err), nil
 	}
-
-	var (
-		img     []byte
-		imgType string
-	)
-
-	if format == "png" {
-		png, err := SvgToPng(ctx, svg)
-		if err != nil {
-			return mcp.NewToolResultError("PNG rendering failed: " + err.Error()), nil
+	if format == "svg" {
+		if err := checkSVG(data); err != nil {
+			return errorResult("unsupported_feature", err), nil
 		}
-		img = png
-		imgType = "image/png"
+	}
+	mime := map[string]string{"png": "image/png", "svg": "image/svg+xml", "ascii": "text/plain"}[format]
+	digest := sha256.Sum256(data)
+	meta := artifact{MIMEType: mime, Bytes: len(data), SHA256: hex.EncodeToString(digest[:])}
+	meta.URI = "urn:sha256:" + meta.SHA256
+	var content []mcp.Content
+	if args.OutputName != "" || (a.config.WriteFiles && args.FilePath != nil) {
+		if err := ctx.Err(); err != nil {
+			return errorResult("cancelled", err), nil
+		}
+		meta.Path, err = a.writeArtifact(args.OutputName, format, data)
+		if err != nil {
+			return errorResult("write_failed", err), nil
+		}
+		meta.URI = (&url.URL{Scheme: "file", Path: filepath.ToSlash(meta.Path)}).String()
+		content = []mcp.Content{&mcp.TextContent{Text: "D2 diagram rendered to: " + meta.Path}, &mcp.ResourceLink{URI: meta.URI, Name: filepath.Base(meta.Path), MIMEType: mime, Size: ptr(int64(len(data)))}}
 	} else {
-		img = svg
-		imgType = "image/svg+xml"
-	}
-
-	// Write to file if --write-files flag is enabled AND file_path was provided
-	if GlobalWriteFiles {
-		if filePath, ok := args["file_path"].(string); ok && filePath != "" {
-			outputPath := generateOutputFilename(filePath, format)
-			if err := os.WriteFile(outputPath, img, 0644); err != nil {
-				return nil, errors.New("failed to write output file: " + err.Error())
-			}
-			return mcp.NewToolResultText("D2 diagram rendered to: " + outputPath), nil
+		switch format {
+		case "png":
+			content = []mcp.Content{&mcp.ImageContent{Data: data, MIMEType: mime}}
+		case "svg":
+			content = []mcp.Content{&mcp.EmbeddedResource{Resource: &mcp.ResourceContents{URI: meta.URI, MIMEType: mime, Text: string(data)}}}
+		case "ascii":
+			content = []mcp.Content{&mcp.TextContent{Text: string(data)}}
 		}
 	}
-
-	// Always return base64 encoded image by default
-	imageEncoded := base64.StdEncoding.EncodeToString(img)
-	return mcp.NewToolResultImage("D2 diagram", imageEncoded, imgType), nil
+	return &mcp.CallToolResult{Content: content, StructuredContent: map[string]any{"status": "ok", "artifact": meta, "options": settings}}, nil
+}
+func (a *application) CompileD2Handler(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return a.execute(ctx, r, false)
+}
+func (a *application) RenderD2Handler(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return a.execute(ctx, r, true)
+}
+func FetchD2CheatSheetHandler(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sheet, err := loadCheatSheet()
+	if err != nil {
+		return errorResult("internal_error", err), nil
+	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: sheet}}}, nil
 }
 
-func FetchD2CheatSheetHandler(
-	ctx context.Context,
-	request mcp.CallToolRequest,
-) (*mcp.CallToolResult, error) {
-	cheatSheet, err := loadCheatSheet()
-	if err != nil {
-		return nil, err
+// D2 escapes XML; additionally reject active or external resource references
+// in the emitted artifact, including links originating in Markdown labels.
+func checkSVG(data []byte) error {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("invalid SVG: %w", err)
+		}
+		element, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		if element.Name.Local == "script" || element.Name.Local == "foreignObject" {
+			return errors.New("active SVG content is disabled")
+		}
+		for _, attr := range element.Attr {
+			if strings.HasPrefix(strings.ToLower(attr.Name.Local), "on") {
+				return errors.New("SVG event handlers are disabled")
+			}
+			if attr.Name.Local == "href" && !strings.HasPrefix(attr.Value, "#") && !(element.Name.Local == "a" && d2.SafeLink(attr.Value)) && !(element.Name.Local == "image" && safeEmbeddedPNG(attr.Value)) {
+				return errors.New("external SVG resources and unsafe links are disabled")
+			}
+		}
 	}
-	return mcp.NewToolResultText(cheatSheet), nil
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// D2's built-in grain pattern embeds a PNG. Allow bounded raster data, never SVG
+// data (which can itself contain links/scripts). Source icons are still rejected.
+func safeEmbeddedPNG(value string) bool {
+	const prefix = "data:image/png;base64,"
+	if !strings.HasPrefix(value, prefix) || len(value) > 128<<10 {
+		return false
+	}
+	data, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(value, prefix))
+	if err != nil {
+		return false
+	}
+	size, err := png.DecodeConfig(bytes.NewReader(data))
+	return err == nil && size.Width > 0 && size.Height > 0 && size.Width <= 1024 && size.Height <= 1024
 }
