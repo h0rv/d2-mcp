@@ -222,7 +222,7 @@ module.main(["--version", "1.2.0", "--sha256", sys.argv[1], "--dir", "installed 
         result = subprocess.run([sys.executable, "-c", harness, DIGEST], cwd=self.temporary.name, capture_output=True, text=True, check=True)
         target = Path(self.temporary.name) / "installed bin" / "d2-mcp"
         self.assertEqual(target.read_bytes(), PAYLOAD)
-        self.assertEqual(json.loads(result.stdout)["mcpServers"]["d2"]["command"], str(target))
+        self.assertEqual(json.loads(result.stdout)["mcpServers"]["d2"]["command"], str(target.resolve()))
         self.assertIn("Installed d2-mcp 1.2.0", result.stderr)
 
 
