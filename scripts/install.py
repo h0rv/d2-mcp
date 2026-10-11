@@ -1,7 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Install a pinned d2-mcp GitHub release without a checkout or Go compiler.
 
-Requires Python 3.9+. Downloads only from h0rv/d2-mcp and GitHub's asset CDN,
+Run with uv; requires Python 3.11+ and no third-party modules.
+Downloads only from h0rv/d2-mcp and GitHub's asset CDN,
 checks GitHub's SHA-256 asset digest, and prints a client configuration snippet.
 This verifies transfer integrity against GitHub metadata, not signed provenance.
 Use --sha256 to pin a previously verified digest instead of consulting the API.

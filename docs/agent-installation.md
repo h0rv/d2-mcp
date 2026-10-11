@@ -69,12 +69,12 @@ No public endpoint is configured. Use HTTPS outside loopback testing. Configure 
 
 ## Advanced: generate a configured bundle
 
-Maintainers and users needing a customized plugin may generate one from a checkout. This optional workflow requires Python 3.11+ and an existing binary or remote endpoint:
+Maintainers and users needing a customized plugin may generate one from a checkout. This optional workflow uses [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.13.0 or newer and an existing binary or remote endpoint. Script metadata selects Python 3.11+; uv downloads a compatible interpreter if needed. No third-party Python packages are used:
 
 ```sh
-python3 agents/build.py --local-command /absolute/path/d2-mcp --output ./agents/build/local
+uv run agents/build.py --local-command /absolute/path/d2-mcp --output ./agents/build/local
 # Or, for your existing remote endpoint:
-python3 agents/build.py --url "$D2_MCP_URL" --output ./agents/build/remote
+uv run agents/build.py --url "$D2_MCP_URL" --output ./agents/build/remote
 ```
 
 The output directory must be new. Generation does not change client settings or contact the endpoint. HTTPS is required except on loopback; credential-bearing URLs, queries, fragments, invalid ports, control characters, and ambiguous hostnames are rejected. Use ASCII DNS/punycode or canonical IP addresses. Internationalized URL paths are supported.
@@ -97,7 +97,7 @@ To opt into server-local source and artifact directories:
 
 ```sh
 mkdir -p diagrams artifacts
-python3 agents/build.py --local-command /absolute/path/d2-mcp --output ./agents/build/files \
+uv run agents/build.py --local-command /absolute/path/d2-mcp --output ./agents/build/files \
   --server-arg=--input-dir --server-arg="$PWD/diagrams" \
   --server-arg=--output-dir --server-arg="$PWD/artifacts"
 ```
@@ -109,9 +109,9 @@ Local bundles force stdio. This example does not enable assets or overwriting; s
 Static GitHub packages always use the local `d2-mcp` command. `agents/defaults.json` is the generator's only default endpoint source. After a deployment is separately authorized and verified, its `remote_url` can supply generated remote packages. Selection is explicit `--local-command`, otherwise explicit `--url`, `D2_MCP_URL`, verified generator default URL, then local binary. Existing installations are snapshots and do not silently change connection. A deployment-specific authentication flow still needs verification before distributing that default.
 
 ```sh
-D2_MCP_TEST_BINARY=/absolute/path/d2-mcp python3 -m unittest discover -s agents -v
+D2_MCP_TEST_BINARY=/absolute/path/d2-mcp uv run agents/test_build.py -v
 # Optional native Codex parsing, with no saved settings or model requests:
-D2_MCP_TEST_CODEX=/absolute/path/codex python3 -m unittest discover -s agents -v
+D2_MCP_TEST_CODEX=/absolute/path/codex uv run agents/test_build.py -v
 ```
 
 Tests cover endpoint selection, URL rejection, non-destructive generation, static and generated manifest paths, matching client configurations including Unicode paths, and real stdio/loopback HTTP initialize/discover/validate/SVG-render flows. A static package also runs from a fresh directory outside the checkout with the binary on PATH and conflicting transport environment variables.

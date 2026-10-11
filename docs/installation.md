@@ -48,24 +48,29 @@ integrity under that trust model; it is not independent publisher signing.
 ## Installer prepared for the next release
 
 This branch adds a single standalone `install.py`, to be attached to the next
-release with `SHA256SUMS`. It needs Python 3.9+ and no third-party modules. No
-source checkout, compiler, administrator access, or client-settings generator is
-needed. Download the script from the **chosen published release**, inspect it,
-then run it with that exact release tag:
+release with `SHA256SUMS`. Run it with [uv](https://docs.astral.sh/uv/getting-started/installation/)
+0.13.0 or newer. Install uv independently using its prebuilt distribution; uv
+itself needs neither Python nor d2-mcp. The script declares Python 3.11+ and no
+third-party modules, so uv can select or download the interpreter. No source
+checkout, compiler, administrator access, or existing d2-mcp binary is needed.
+Download the script from the **chosen published release**, inspect it, then run
+it with that exact release tag:
 
 ```sh
 curl --fail --location --proto '=https' --proto-redir '=https' \
   --output install.py \
   https://github.com/h0rv/d2-mcp/releases/download/RELEASE_TAG/install.py
 # Inspect install.py before running it. Replace RELEASE_TAG with the chosen tag.
-python3 install.py --version RELEASE_TAG
+uv run install.py --version RELEASE_TAG
 ```
 
 On Windows, download `install.py` from that release in the browser and run
-`py -3 install.py --version RELEASE_TAG`. Release 1.2.0 has no installer asset:
+`uv run install.py --version RELEASE_TAG`. Release 1.2.0 has no installer asset:
 the download example becomes available only after a release containing this
 change is published. A reviewed copy of the new script can also install 1.2.0,
-but doing so still installs its legacy behavior.
+but doing so still installs its legacy behavior. The direct executable download
+above remains available without uv or Python. The installer does not fetch this
+repository or build D2 from source.
 
 The installer selects the platform, fetches metadata only for the exact tag in
 `h0rv/d2-mcp`, and verifies the executable's size and SHA-256 before installation.

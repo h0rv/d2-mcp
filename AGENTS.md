@@ -9,6 +9,7 @@ The Go entry point lives in `main.go`, which wires CLI and SSE flags and registe
 - `go run . --transport http --port 8080`: start the streamable HTTP transport for MCP clients.
 - `go run . --transport stdio --image-type ascii`: default stdio transport tuned for LLM-friendly ASCII output.
 - `go test ./...`: execute all Go unit tests; add `-v` locally when stabilising flaky cases.
+- `uv run scripts/test_install.py -v` and `uv run agents/test_build.py -v`: run dependency-free Python checks with Python 3.11+; use uv 0.13.0 or newer for all Python tooling. Script metadata selects the interpreter. Set `D2_MCP_TEST_BINARY` to a built binary for real agent-package MCP checks.
 - `docker build . -t d2-mcp`: produce the container image that matches production runners.
 - `npx @modelcontextprotocol/inspector ./d2-mcp`: inspect tool contracts during MCP client debugging.
 

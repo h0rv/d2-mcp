@@ -1,3 +1,8 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Hermetic packaging tests; optional real server handshake with D2_MCP_TEST_BINARY."""
 
 import argparse
@@ -106,6 +111,22 @@ class PackagingTests(unittest.TestCase):
         args.local_command = "/does-not-exist/d2-mcp"
         with self.assertRaisesRegex(ValueError, "install a release binary"):
             build.endpoint(args, {"remote_url": None})
+
+    def test_uv_generator_from_unrelated_project(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "pyproject.toml").write_text('[project]\nname = "unrelated"\nversion = "0"\nrequires-python = "<3.11"\n')
+            destination = root / "generated bundle"
+            subprocess.run(
+                ["uv", "run", "--offline", "--no-python-downloads", "--python", sys.executable,
+                 str(build.ROOT / "build.py"), "--local-command", sys.executable,
+                 "--output", str(destination)], cwd=root,
+                capture_output=True, text=True, check=True, timeout=30,
+            )
+            config = tomllib.loads((destination / "configs/codex.toml").read_text())
+            self.assertEqual(config["mcp_servers"]["d2"]["command"], str(Path(sys.executable).resolve()))
+            self.assertFalse((root / ".venv").exists())
+            self.assertFalse((root / "uv.lock").exists())
 
     @unittest.skipUnless(os.environ.get("D2_MCP_TEST_CODEX"), "Set D2_MCP_TEST_CODEX for native Codex config parsing")
     def test_native_codex_config_without_persisting_settings(self):

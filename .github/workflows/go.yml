@@ -13,7 +13,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            python: '3.9'
+            python: '3.11'
           - os: macos-latest
             python: '3.13'
           - os: windows-latest
@@ -21,15 +21,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
+          version: '0.13.0'
+          enable-cache: false
           python-version: ${{ matrix.python }}
       - uses: actions/setup-go@v5
         if: runner.os != 'Linux'
         with:
           go-version-file: go.mod
       - name: Check standalone installer and platform handling
-        run: python -m unittest discover -s scripts -v
+        run: uv run --no-project -m unittest discover -s scripts -v
       - name: Exercise native rendering, transports, and rooted files
         if: runner.os != 'Linux'
         run: go test -count=1 ./...
@@ -37,13 +39,13 @@ jobs:
         id: platform
         shell: bash
         run: |
-          python -c 'import sys; sys.path.insert(0, "scripts"); import install; print("asset=" + install.asset_for_platform()); print("target=" + install.asset_for_platform().removeprefix("d2-mcp-").removesuffix(".exe"))' >> "$GITHUB_OUTPUT"
+          uv run --no-project python -c 'import sys; sys.path.insert(0, "scripts"); import install; print("asset=" + install.asset_for_platform()); print("target=" + install.asset_for_platform().removeprefix("d2-mcp-").removesuffix(".exe"))' >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
           name: binary-${{ steps.platform.outputs.target }}
           path: release
       - name: Install exact artifact outside checkout and exercise MCP
-        run: python scripts/check_artifact.py --binary release/${{ steps.platform.outputs.asset }} --version 0.0.0-ci
+        run: uv run scripts/check_artifact.py --binary release/${{ steps.platform.outputs.asset }} --version 0.0.0-ci
   test:
     runs-on: ubuntu-latest
     steps:
@@ -55,13 +57,15 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
       - run: go build ./...
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
-          python-version: '3.12'
+          version: '0.13.0'
+          enable-cache: false
+          python-version: '3.11'
       - name: Validate agent packages and real MCP connections
         run: |
           go build -o d2-mcp .
-          D2_MCP_TEST_BINARY="$PWD/d2-mcp" python3 -m unittest discover -s agents -v
+          D2_MCP_TEST_BINARY="$PWD/d2-mcp" uv run --no-project -m unittest discover -s agents -v
   cross-build:
     runs-on: ubuntu-latest
     strategy:

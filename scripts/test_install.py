@@ -1,3 +1,8 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Hermetic release installer checks; no network or installed client required."""
 
 import contextlib
@@ -11,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from unittest import mock
 import urllib.error
@@ -202,9 +208,23 @@ class InstallerTests(unittest.TestCase):
         snippet = installer.config_snippet(target, "codex")
         self.assertNotIn("\x7f", snippet)
         self.assertNotIn("\\ud83d", snippet)
-        if sys.version_info >= (3, 11):
-            import tomllib
-            self.assertEqual(tomllib.loads(snippet)["mcp_servers"]["d2"], {"command": str(target), "args": ["--transport", "stdio"]})
+        self.assertEqual(tomllib.loads(snippet)["mcp_servers"]["d2"], {"command": str(target), "args": ["--transport", "stdio"]})
+
+    def test_uv_standalone_entry_point_ignores_unrelated_project(self):
+        copied = Path(self.temporary.name) / "install.py"
+        shutil.copyfile(SCRIPT, copied)
+        # A downloaded installer must not install/build the project in the
+        # user's current directory. Inline metadata supplies its own runtime.
+        project = Path(self.temporary.name) / "pyproject.toml"
+        project.write_text('[project]\nname = "unrelated"\nversion = "0"\nrequires-python = "<3.11"\ndependencies = ["not-an-installer-dependency"]\n')
+        result = subprocess.run(
+            ["uv", "run", "--offline", "--no-python-downloads", "--python", sys.executable,
+             str(copied), "--help"], cwd=self.temporary.name,
+            capture_output=True, text=True, check=True, timeout=30,
+        )
+        self.assertIn("--version", result.stdout)
+        self.assertFalse(project.with_name(".venv").exists())
+        self.assertFalse(project.with_name("uv.lock").exists())
 
     def test_standalone_installer_outside_checkout(self):
         copied = Path(self.temporary.name) / "install.py"

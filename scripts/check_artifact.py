@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Check a native release artifact outside the checkout without publishing it.
 
 Only the installer's download boundary is replaced by a local release fixture.
