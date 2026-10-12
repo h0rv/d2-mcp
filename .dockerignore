@@ -1,3 +1,7 @@
 .git
 d2-mcp
 *.out
+cloudflare/node_modules
+cloudflare/build
+cloudflare/.wrangler
+cloudflare/.dev.vars
