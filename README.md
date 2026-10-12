@@ -47,6 +47,24 @@ Legacy SSE remains available at `/sse` with `--transport sse` (or `--sse`). Its 
 
 HTTP binds to loopback by default, rejects cross-origin browser requests, and retains the SDK's localhost/DNS-rebinding protection. There is no built-in authentication or multi-user authorization. If exposing it beyond a trusted local environment, supply authentication, TLS, request limits, and process resource limits in your deployment. No public hosting is configured by this repository.
 
+### Optional diagram viewer
+
+Add `--ui` to offer a bundled [MCP Apps viewer](docs/mcp-apps.md) to compatible
+hosts. It previews inline diagrams, supports pan/zoom/fit and copying D2 source,
+and offers PNG downloads when the host advertises them. Ask the agent to change
+the source or theme; the viewer has no separate editable diagram state.
+The flag defaults to off. Ordinary tool names, results, and stateless HTTP
+behavior are unchanged; no Node runtime, website, or download store is needed.
+
+```sh
+./d2-mcp --transport http --host 127.0.0.1 --port 8080 --ui
+```
+
+Connect to `/mcp` using the client's custom MCP configuration. A remote host
+needs your operator-provided HTTPS endpoint, not a marketplace listing.
+Client availability and download support vary; see the guide's evidence and
+limitations. This feature is unreleased and is not in the published 1.2.0 binary.
+
 ## Tools
 
 - `compile-d2`: validate syntax, semantics, layout, and server limits, with located diagnostics when available.
@@ -171,8 +189,10 @@ The image runs as a non-root user and includes the statically built Go server. F
 
 ## Development
 
-Implementation, tests and release tooling use Go. Client manifests are static
-JSON; CI uses YAML and short shell commands. No Python or Node setup is needed.
+Native implementation, tests and release tooling use Go. Client manifests are
+static JSON; CI uses YAML and short shell commands. Native development needs no
+Python or Node. Optional browser and provider adapters use JavaScript and Node
+tooling; their setup guides list the additional build and test commands.
 
 ```sh
 go test ./...

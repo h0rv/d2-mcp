@@ -1,0 +1,45 @@
+name: MCP Apps
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, codex/d2-stateless-refresh]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install locked UI dependencies without lifecycle scripts
+        working-directory: apps
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify reproducible embedded viewer
+        working-directory: apps
+        run: |
+          npm run build
+          git diff --exit-code -- dist/viewer.html
+      - name: Build the actual Go server
+        run: go build -o d2-mcp .
+      - name: Install browser
+        working-directory: apps
+        run: npx playwright install --with-deps chromium
+      - name: Exercise sandboxed UI and real MCP rendering
+        working-directory: apps
+        run: D2_MCP_TEST_BINARY="$GITHUB_WORKSPACE/d2-mcp" npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mcp-apps-browser-report
+          path: |
+            apps/playwright-report/
+            apps/test-results/
+          retention-days: 7
