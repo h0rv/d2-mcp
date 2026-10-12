@@ -24,6 +24,7 @@ var diagramAppHTML string
 
 func diagramAppMeta() mcp.Meta {
 	return mcp.Meta{"ui": map[string]any{
+		"permissions": map[string]any{"clipboardWrite": map[string]any{}},
 		"csp": map[string]any{
 			"connectDomains":  []string{},
 			"resourceDomains": []string{},

@@ -20,37 +20,43 @@ For remote clients, use your deployed HTTPS endpoint and its authentication.
 A remote client cannot reach your laptop's loopback address. The separate
 Cloudflare deployment branch serves ordinary tools with the viewer disabled.
 
-| Client | Connection instructions |
+| Client | Documented inline UI support (checked 2026-10-12) |
 | --- | --- |
-| ChatGPT | [Custom connection setup](https://developers.openai.com/plugins/deploy/connect-chatgpt); account/admin policy controls availability |
-| Claude | [Remote connectors](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) |
-| VS Code | [MCP configuration](https://code.visualstudio.com/api/extension-guides/ai/mcp) |
+| ChatGPT | [MCP Apps compatibility](https://developers.openai.com/plugins/changelog); [custom connection setup](https://developers.openai.com/plugins/deploy/connect-chatgpt) depends on account/admin policy |
+| Claude chat, Desktop and mobile | [Interactive connectors](https://support.claude.com/en/articles/13454812-use-interactive-connectors-in-claude) |
+| VS Code | [Built-in MCP Apps support since 1.109](https://code.visualstudio.com/updates/v1_109#_support-for-mcp-apps) |
+| Codex Desktop; Claude Code Desktop/CLI | Native inline MCP Apps rendering unverified; ordinary MCP tool support alone does not establish it |
+| OpenCode Desktop | No documented native support; [feature request remains open](https://github.com/anomalyco/opencode/issues/10884) |
 
-These are setup references. Testing uses the official MCP Apps bridge in a
-sandboxed browser harness, not live sessions in those products.
+These are product support references, not end-to-end tests of this viewer in
+those products. Testing uses the official MCP Apps bridge in a sandboxed browser
+harness. Ordinary SVG/PNG/ASCII tool results remain usable without inline UI.
 
 ## Use
 
-Preview SVG/PNG/ASCII, drag to pan, and use zoom/fit. Edit complete source and
-press **Render diagram**; typing sends no requests. D2 defaults apply unless the
-input supplies rendering options. Every render uses the existing `render-d2` tool.
+Preview SVG/PNG/ASCII, drag to pan, and use zoom/fit. The viewer preserves the
+rendered diagram's D2 styling and colors. Ask the agent to change source, layout
+or theme through the existing `render-d2` tool. There is no local editor or
+second diagram state for the agent to track.
 
-File/document inputs can be previewed, but paste source to edit them. The viewer
-never fetches server files or forwards file paths, document IDs, output names or
-overwrite flags. Edits live in the iframe and are lost on reload unless copied
-or downloaded.
+**Copy D2** copies the complete source supplied in the tool's `code` input. If
+the host blocks clipboard access, it selects the read-only source for manual
+copying. File/document inputs can be previewed, but their source is not fetched;
+Copy D2 is disabled when source is unavailable.
 
-**Source** downloads D2 text. **PNG** exports the decoded image through a canvas;
-use the ordinary MCP result for original SVG. Downloads require host support and
-approval. Cancel discards late replies; server cancellation remains cooperative.
+**Download PNG** exports the decoded image through a canvas when the host
+supports downloads, subject to its approval policy. Use the ordinary MCP result
+for original SVG. Host updates and cancellation discard pending image decodes.
 
 ![Viewer in the local protocol harness](images/mcp-apps.png)
 
 ## Compatibility and boundaries
 
-The official `@modelcontextprotocol/ext-apps` bridge handles UI messaging, tool
-calls and downloads. Rendering requires the host's `serverTools` capability;
-downloads require `downloadFile`. Unsupported controls stay disabled.
+The official `@modelcontextprotocol/ext-apps` bridge handles UI messaging and
+downloads. The viewer makes no tool calls and needs no `serverTools` capability.
+It requests the standard `clipboardWrite` permission, with a manual fallback;
+it never reads the clipboard. PNG downloads require `downloadFile` and the
+button is hidden when unsupported.
 
 `--ui` publishes a static `ui://d2/viewer` resource. Tool metadata is negotiated
 per request. Legacy stateless HTTP before `2026-07-28` may lack capabilities on

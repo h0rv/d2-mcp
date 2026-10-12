@@ -6,57 +6,41 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-BUNDLE_HASH'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
   <title>D2 diagram</title>
   <style>
-    :root { color-scheme: light dark; --bg:#fff; --fg:#1b2b41; --muted:#5a6b80; --line:#dce3ec; --subtle:#f5f7fb; --accent:#235bdd; --grid:#dbe2ec; font:14px/1.5 system-ui,sans-serif; }
-    :root[data-theme=dark] { --bg:#171d28; --fg:#e5ecf6; --muted:#a8b6cb; --line:#354052; --subtle:#202836; --accent:#8cb2ff; --grid:#354052; color-scheme:dark; }
-    :root[data-theme=light] { color-scheme:light; }
+    :root { color-scheme:light; --bg:#fff; --fg:#0A0F25; --muted:#676C7E; --line:#CFD2DD; --subtle:#F7F8FE; --accent:#0D32B2; font:14px/1.5 system-ui,sans-serif; }
+    :root[data-theme=dark] { color-scheme:dark; --bg:#0A0F25; --fg:#EEF1F8; --muted:#9499AB; --line:#676C7E; --subtle:#171c32; --accent:#CFD2DD; }
     * { box-sizing:border-box; } body { margin:0; color:var(--fg); background:var(--bg); }
-    header { padding:16px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); gap:12px; }
-    .brand { display:flex; align-items:center; gap:10px; } .mark { border:2px solid var(--accent); border-radius:7px; color:var(--accent); padding:1px 6px; font-weight:750; }
-    h1 { margin:0; font-size:16px; letter-spacing:-.3px; } .subtitle { color:var(--muted); font-size:12px; }
-    button,select { font:inherit; border:1px solid var(--line); color:var(--fg); background:var(--bg); border-radius:6px; padding:6px 10px; }
-    button { cursor:pointer; } button:disabled { opacity:.45; cursor:default; } button:focus-visible,select:focus-visible,textarea:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-    button.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:650; }
-    .workspace { display:grid; grid-template-columns:minmax(200px, 36%) 1fr; height:460px; }
-    .editor { border-right:1px solid var(--line); display:flex; flex-direction:column; min-width:0; }
-    .section-label { padding:12px 16px 8px; color:var(--muted); font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; }
-    textarea { flex:1; min-height:120px; width:100%; resize:none; border:0; padding:8px 16px; background:var(--bg); color:var(--fg); font:12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; tab-size:2; }
-    .editor-controls { border-top:1px solid var(--line); padding:12px; display:flex; flex-wrap:wrap; gap:8px; }
-    label { font-size:12px; color:var(--muted); } label select { display:block; margin-top:3px; font-size:12px; }
-    .actions { width:100%; display:flex; gap:8px; padding-top:3px; }
-    .preview { position:relative; min-width:0; overflow:hidden; background:var(--subtle); }
-    #viewport { position:absolute; inset:0; overflow:hidden; touch-action:none; background-image:radial-gradient(var(--grid) 1px,transparent 1px); background-size:16px 16px; cursor:grab; }
+    header { padding:10px 14px; display:flex; flex-wrap:wrap; align-items:center; gap:8px; border-bottom:1px solid var(--line); }
+    h1 { margin:0; font-size:14px; font-weight:600; } #connection { margin-right:auto; color:var(--muted); font-size:12px; }
+    button { font:inherit; font-size:12px; border:1px solid var(--line); color:var(--fg); background:var(--bg); border-radius:4px; padding:5px 9px; cursor:pointer; }
+    button:disabled { opacity:.45; cursor:default; } button:focus-visible,summary:focus-visible,textarea:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    .view-controls { display:flex; gap:4px; } .view-controls button { min-width:30px; }
+    .preview { position:relative; height:440px; overflow:hidden; background:var(--subtle); }
+    #viewport { position:absolute; inset:0; overflow:hidden; touch-action:none; cursor:grab; }
     #viewport:active { cursor:grabbing; } #diagram { position:absolute; top:50%; left:50%; transform-origin:center; max-width:none; pointer-events:none; user-select:none; }
-    #ascii { margin:0; position:absolute; inset:0; overflow:auto; padding:56px 20px 20px; font:12px/1.35 ui-monospace,monospace; white-space:pre; }
+    #ascii { margin:0; position:absolute; inset:0; overflow:auto; padding:20px; font:12px/1.35 ui-monospace,monospace; white-space:pre; }
     #empty { position:absolute; inset:0; display:grid; place-content:center; padding:24px; text-align:center; color:var(--muted); pointer-events:none; }
-    #empty[hidden], [hidden] { display:none !important; }
-    .view-controls { position:absolute; top:12px; right:12px; display:flex; gap:4px; z-index:1; }
-    .view-controls button { min-width:32px; padding:4px 9px; }
-    footer { border-top:1px solid var(--line); padding:12px 16px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
-    #status { margin:0; font-size:12px; max-width:100%; overflow-wrap:anywhere; white-space:pre-wrap; } #status[data-error=true] { color:#c23d43; }
-    .downloads { display:flex; gap:8px; } .downloads button { font-size:12px; } #support { margin:0; color:var(--muted); font-size:11px; width:100%; }
-    @media(max-width:580px) { .workspace { grid-template-columns:1fr; height:auto; } .editor { border-right:0; border-bottom:1px solid var(--line); height:270px; } .preview { height:320px; } header { padding:12px 16px; } }
+    [hidden] { display:none !important; }
+    #source-panel { border-top:1px solid var(--line); } summary { padding:8px 14px; cursor:pointer; color:var(--muted); font-size:12px; }
+    textarea { display:block; width:100%; height:160px; resize:vertical; border:0; border-top:1px solid var(--line); padding:12px 14px; background:var(--bg); color:var(--fg); font:12px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; tab-size:2; }
+    #status { margin:0; border-top:1px solid var(--line); padding:8px 14px; font-size:12px; color:var(--muted); overflow-wrap:anywhere; white-space:pre-wrap; } #status[data-error=true] { color:#c23d43; }
+    @media(max-width:480px) { .preview { height:340px; } }
   </style>
 </head>
 <body>
-  <header><div class="brand"><span class="mark" aria-hidden="true">D2</span><div><h1>Diagram workspace</h1><div class="subtitle">Edit source. Render a fresh preview.</div></div></div><span class="subtitle" id="connection">Connecting…</span></header>
-  <main class="workspace">
-    <section class="editor" aria-label="Diagram source">
-      <label class="section-label" for="source">D2 source</label>
-      <textarea id="source" spellcheck="false" maxlength="262144" placeholder="Paste complete D2 source here…"></textarea>
-      <div class="editor-controls">
-        <label>Layout<select id="layout"><option value="dagre">Dagre</option><option value="elk">ELK</option><option value="tala">TALA</option></select></label>
-        <label>Format<select id="format"><option value="svg">SVG</option><option value="png">PNG</option><option value="ascii">ASCII</option></select></label>
-        <div class="actions"><button id="render" class="primary" disabled>Render diagram</button><button id="cancel" disabled>Cancel</button></div>
-      </div>
-    </section>
+  <header>
+    <h1>D2 diagram</h1><span id="connection">Connecting…</span>
+    <div class="view-controls" aria-label="Preview controls"><button id="zoom-out" aria-label="Zoom out" disabled>−</button><button id="fit" disabled>Fit</button><button id="zoom-in" aria-label="Zoom in" disabled>+</button></div>
+    <button id="copy-source" disabled>Copy D2</button><button id="download-image" disabled hidden>Download PNG</button>
+  </header>
+  <main>
     <section class="preview" aria-label="Diagram preview">
-      <div id="viewport" tabindex="0" aria-label="Diagram canvas. Drag to pan; use buttons to zoom."><img id="diagram" alt="Rendered D2 diagram" hidden draggable="false"></div>
+      <div id="viewport" aria-label="Diagram canvas. Drag to pan; use buttons to zoom."><img id="diagram" alt="Rendered D2 diagram" hidden draggable="false"></div>
       <pre id="ascii" aria-label="ASCII diagram" hidden></pre>
       <div id="empty">Your diagram will appear here.</div>
-      <div class="view-controls"><button id="zoom-out" aria-label="Zoom out" disabled>−</button><button id="fit" disabled>Fit</button><button id="zoom-in" aria-label="Zoom in" disabled>+</button></div>
     </section>
+    <details id="source-panel" hidden><summary>D2 source</summary><textarea id="source" aria-label="D2 source (read only)" readonly spellcheck="false"></textarea></details>
   </main>
-  <footer><p id="status" role="status" aria-live="polite">Waiting for the host.</p><div class="downloads"><button id="download-source" disabled>Source ↓</button><button id="download-image" disabled>PNG ↓</button></div><p id="support">Downloads and rendering depend on host capabilities.</p></footer>
+  <p id="status" role="status" aria-live="polite">Waiting for the host.</p>
   <script>/* BUNDLE */</script>
 </body>
 </html>

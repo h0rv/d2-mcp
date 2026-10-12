@@ -66,8 +66,8 @@ export const test = base.extend({
   }, { scope: 'worker', timeout: 60_000 }],
   viewer: async ({ page, harnessServer }, use) => {
     await page.goto(harnessServer.url);
-    await use(async (capabilities, realServer = false) => {
-      await page.evaluate(([caps, real]) => window.harness.mount(caps, real), [capabilities, realServer]);
+    await use(async (capabilities, permissions = {}) => {
+      await page.evaluate(([caps, permissions]) => window.harness.mount(caps, permissions), [capabilities, permissions]);
       const frame = page.frameLocator('#viewer');
       await expect(frame.locator('#connection')).toHaveText('Connected');
       return frame;
@@ -87,10 +87,4 @@ export async function sendInput(page, args = { code: 'a -> b' }) {
 }
 export async function sendResult(page, result) {
   await page.evaluate((result) => window.harness.result(result), result);
-}
-export async function resolveCall(page, index, result) {
-  await page.evaluate(([i, result]) => window.harness.resolve(i, result), [index, result]);
-}
-export async function callCount(page, count) {
-  await expect.poll(() => page.evaluate(() => window.harness.calls.length)).toBe(count);
 }

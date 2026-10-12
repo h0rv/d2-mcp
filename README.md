@@ -50,8 +50,9 @@ HTTP binds to loopback by default, rejects cross-origin browser requests, and re
 ### Optional diagram viewer
 
 Add `--ui` to offer a bundled [MCP Apps viewer](docs/mcp-apps.md) to compatible
-hosts. It previews inline diagrams, supports pan/zoom and complete-source
-rerenders, and offers PNG/source downloads when the host advertises them.
+hosts. It previews inline diagrams, supports pan/zoom/fit and copying D2 source,
+and offers PNG downloads when the host advertises them. Ask the agent to change
+the source or theme; the viewer has no separate editable diagram state.
 The flag defaults to off. Ordinary tool names, results, and stateless HTTP
 behavior are unchanged; no Node runtime, website, or download store is needed.
 

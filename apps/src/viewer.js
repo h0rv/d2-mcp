@@ -9,8 +9,8 @@ const MAX_PIXELS = 16 * 1024 * 1024;
 const encoder = new TextEncoder();
 const $ = (id) => document.getElementById(id);
 const app = new App({ name: 'd2-viewer', version: '0.1.0' }, {}, { autoResize: true });
-let canRender = false, canDownload = false;
-let sequence = 0, pending, previewURL, extraOptions = {};
+let canDownload = false, disposed = false;
+let sequence = 0, previewURL;
 let scale = 1, panX = 0, panY = 0, drag;
 
 function status(message, error = false) {
@@ -18,11 +18,9 @@ function status(message, error = false) {
   $('status').dataset.error = String(error);
 }
 function buttons() {
-  $('render').disabled = !canRender || !!pending || !$('source').value.trim();
-  $('cancel').disabled = !pending;
-  $('download-source').disabled = !canDownload || !$('source').value;
-  $('download-image').disabled = !canDownload || !previewURL || !!pending;
-  for (const id of ['zoom-in', 'zoom-out', 'fit']) $(id).disabled = !previewURL;
+  $('copy-source').disabled = disposed || !$('source').value;
+  $('download-image').disabled = disposed || !canDownload || !previewURL;
+  for (const id of ['zoom-in', 'zoom-out', 'fit']) $(id).disabled = disposed || !previewURL;
 }
 function clearPreview() {
   previewURL = undefined;
@@ -35,8 +33,7 @@ function clearPreview() {
 }
 function invalidate() {
   sequence++;
-  pending?.abort();
-  pending = undefined;
+  drag = undefined;
   buttons();
   return sequence;
 }
@@ -143,49 +140,48 @@ async function showResult(result, id) {
 }
 
 app.ontoolinput = ({ arguments: args }) => {
+  if (disposed) return;
   invalidate();
   clearPreview();
-  extraOptions = {};
   $('source').value = '';
+  $('source-panel').open = false;
   if (args && typeof args === 'object') {
     if (typeof args.code === 'string' && args.code.length <= MAX_SOURCE && encoder.encode(args.code).length <= MAX_SOURCE) $('source').value = args.code;
-    $('layout').value = ['dagre', 'elk', 'tala'].includes(args.layout) ? args.layout : 'dagre';
-    $('format').value = ['svg', 'png', 'ascii'].includes(args.format) ? args.format : 'svg';
-    // Preserve only known rendering settings. Never forward paths, document IDs,
-    // output names, overwrite flags, or arbitrary properties from tool input.
-    for (const key of ['theme_id', 'dark_theme_id', 'padding', 'scale']) if (typeof args[key] === 'number' && Number.isFinite(args[key])) extraOptions[key] = args[key];
-    for (const key of ['sketch', 'center']) if (typeof args[key] === 'boolean') extraOptions[key] = args[key];
-    if (['standard', 'extended'].includes(args.ascii_mode)) extraOptions.ascii_mode = args.ascii_mode;
-    if (Array.isArray(args.board_path) && args.board_path.length <= 32 && args.board_path.every((v) => typeof v === 'string' && v.length <= 256)) extraOptions.board_path = [...args.board_path];
   }
-  status($('source').value ? 'Source received. Waiting for the result.' : 'Paste complete source to edit. File and document inputs are not fetched by this viewer.');
+  $('source-panel').hidden = !$('source').value;
+  status($('source').value ? 'Waiting for the diagram.' : 'Source is not included. File and document inputs are not fetched.');
   buttons();
 };
-app.ontoolresult = (result) => { const id = invalidate(); void showResult(result, id); };
-app.ontoolcancelled = () => { invalidate(); clearPreview(); status('Rendering cancelled.'); };
+app.ontoolresult = (result) => { if (!disposed) { const id = invalidate(); void showResult(result, id); } };
+app.ontoolcancelled = () => { if (!disposed) { invalidate(); clearPreview(); status('Rendering cancelled.'); } };
 app.onhostcontextchanged = (context) => {
-  if (['light', 'dark'].includes(context.theme)) document.documentElement.dataset.theme = context.theme;
+  if (!disposed && ['light', 'dark'].includes(context.theme)) document.documentElement.dataset.theme = context.theme;
 };
-app.onteardown = async () => { invalidate(); clearPreview(); return {}; };
-
-$('source').addEventListener('input', buttons);
-$('render').addEventListener('click', async () => {
-  if (!canRender || pending) return;
-  const code = $('source').value;
-  if (!code.trim() || encoder.encode(code).length > MAX_SOURCE) { status('Source must contain 1–262144 UTF-8 bytes.', true); return; }
-  const id = invalidate();
-  const controller = new AbortController();
-  pending = controller;
-  clearPreview();
-  status('Rendering…');
+function dispose() {
+  disposed = true;
+  invalidate(); clearPreview();
+  $('source').value = '';
+  $('source-panel').hidden = true;
+  $('connection').textContent = 'Closed';
+  status('Viewer closed.');
   buttons();
+}
+app.onteardown = async () => { dispose(); return {}; };
+
+$('copy-source').addEventListener('click', async () => {
+  const text = $('source').value, id = sequence;
+  if (disposed || !text) return;
   try {
-    const result = await app.callServerTool({ name: 'render-d2', arguments: { ...extraOptions, code, layout: $('layout').value, format: $('format').value } }, { signal: controller.signal, timeout: 65000 });
-    if (id === sequence) await showResult(result, id);
-  } catch (error) { if (id === sequence) status(error.message || 'Rendering failed.', true); }
-  finally { if (id === sequence) { pending = undefined; buttons(); } }
+    await navigator.clipboard.writeText(text);
+    if (id === sequence) status('D2 source copied.');
+  } catch {
+    if (id !== sequence) return;
+    $('source-panel').open = true;
+    $('source').focus();
+    $('source').select();
+    status('Source selected. Press Ctrl+C or ⌘C to copy.');
+  }
 });
-$('cancel').addEventListener('click', () => { invalidate(); clearPreview(); status('Rendering cancelled. A remote host may finish work already dispatched.'); });
 for (const [id, factor] of [['zoom-in', 1.25], ['zoom-out', 0.8]]) $(id).addEventListener('click', () => { scale = Math.min(8, Math.max(0.05, scale * factor)); transform(); });
 $('fit').addEventListener('click', fit);
 $('viewport').addEventListener('pointerdown', (event) => {
@@ -198,19 +194,14 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) $('view
 new ResizeObserver(fit).observe($('viewport'));
 
 async function download(resource) {
+  const id = sequence;
   try {
     const result = await app.downloadFile({ contents: [{ type: 'resource', resource }] });
-    status(result.isError ? 'The host declined or cancelled the download.' : 'Download handed to the host.', !!result.isError);
-  } catch (error) { status(error.message || 'Download failed.', true); }
+    if (id === sequence) status(result.isError ? 'The host declined or cancelled the download.' : 'Download handed to the host.', !!result.isError);
+  } catch (error) { if (id === sequence) status(error.message || 'Download failed.', true); }
 }
-$('download-source').addEventListener('click', () => {
-  if (!canDownload) return;
-  const text = $('source').value;
-  if (encoder.encode(text).length > MAX_SOURCE) { status('Source exceeds the 256 KiB download limit.', true); return; }
-  void download({ uri: 'file:///diagram.d2', mimeType: 'text/plain', text });
-});
 $('download-image').addEventListener('click', () => {
-  if (!canDownload || !previewURL || pending) return;
+  if (disposed || !canDownload || !previewURL) return;
   try {
     const image = $('diagram');
     dimensions(image.naturalWidth, image.naturalHeight);
@@ -222,19 +213,20 @@ $('download-image').addEventListener('click', () => {
     void download({ uri: 'file:///diagram.png', mimeType: 'image/png', blob });
   } catch (error) { status(error.message || 'PNG export failed.', true); }
 });
-window.addEventListener('pagehide', () => { invalidate(); clearPreview(); void app.close(); });
+window.addEventListener('pagehide', () => { dispose(); void app.close(); });
 (async () => { try {
   await app.connect();
+  if (disposed) return;
   const capabilities = app.getHostCapabilities();
-  canRender = !!capabilities?.serverTools;
   canDownload = !!capabilities?.downloadFile;
   $('connection').textContent = 'Connected';
   const theme = app.getHostContext()?.theme;
   if (['light', 'dark'].includes(theme)) document.documentElement.dataset.theme = theme;
-  $('support').textContent = `${canRender ? 'Edits stay in this viewer until you render.' : 'This host does not advertise interactive tool calls.'} ${canDownload ? 'SVG previews export as PNG; source exports as D2.' : 'This host does not advertise downloads. Use the ordinary tool artifact to save.'}`;
-  if ($('status').textContent === 'Waiting for the host.') status('Connected. Waiting for a diagram or complete source.');
+  $('download-image').hidden = !canDownload;
+  if ($('status').textContent === 'Waiting for the host.') status('Waiting for a diagram.');
   buttons();
 } catch (error) {
+  if (disposed) return;
   $('connection').textContent = 'Host unavailable';
   status(`Could not connect to an MCP Apps host: ${error.message}`, true);
 } })();

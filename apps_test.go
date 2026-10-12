@@ -120,8 +120,12 @@ func TestAppCapabilityNegotiation(t *testing.T) {
 			}
 			for _, meta := range []mcp.Meta{resource.Meta, resources.Resources[0].Meta} {
 				ui := meta["ui"].(map[string]any)
-				if len(ui) != 1 {
+				if len(ui) != 2 {
 					t.Fatalf("unexpected UI permissions or metadata: %+v", ui)
+				}
+				permissions, ok := ui["permissions"].(map[string]any)
+				if !ok || len(permissions) != 1 || !reflect.DeepEqual(permissions["clipboardWrite"], map[string]any{}) {
+					t.Fatalf("only clipboard writes may be requested: %+v", permissions)
 				}
 				csp := ui["csp"].(map[string]any)
 				for _, key := range []string{"connectDomains", "resourceDomains", "frameDomains", "baseUriDomains"} {
