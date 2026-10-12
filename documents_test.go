@@ -64,7 +64,7 @@ func TestOptionalStoreAcrossInstances(t *testing.T) {
 	b := testApp(t, func(c *config) { c.Store = shared })
 	r := storeCall(t, a, "design", "", "a -> b")
 	requireOK(t, r)
-	revision := r.StructuredContent.(map[string]any)["revision"].(string)
+	revision := decodeOutput[storeOutput](t, r).Revision
 	requireOK(t, call(t, b, true, map[string]any{"document_id": "design", "revision": revision, "format": "svg"}))
 	// Caller must retain an explicit revision; arbitrary result metadata is not input.
 	requireError(t, call(t, b, true, map[string]any{"document_id": "design"}), "invalid_arguments")
@@ -73,7 +73,7 @@ func TestOptionalStoreAcrossInstances(t *testing.T) {
 	requireOK(t, r)
 	requireError(t, call(t, a, true, map[string]any{"document_id": "design", "revision": revision}), "revision_conflict")
 	requireError(t, storeCall(t, a, "design", revision, "a -> d"), "revision_conflict")
-	next := r.StructuredContent.(map[string]any)["revision"].(string)
+	next := decodeOutput[storeOutput](t, r).Revision
 	// An unrelated deployment with a different backend cannot resolve the handle.
 	isolated := testApp(t, func(c *config) { c.Store = &testStore{docs: make(map[string]document.Document)} })
 	requireError(t, call(t, isolated, false, map[string]any{"document_id": "design", "revision": next}), "document_not_found")
@@ -87,7 +87,7 @@ func TestStoreConcurrentRevision(t *testing.T) {
 	b := testApp(t, func(c *config) { c.Store = shared })
 	first := storeCall(t, a, "design", "", "a")
 	requireOK(t, first)
-	revision := first.StructuredContent.(map[string]any)["revision"].(string)
+	revision := decodeOutput[storeOutput](t, first).Revision
 	results := make(chan *mcp.CallToolResult, 2)
 	for _, app := range []*application{a, b} {
 		go func() { results <- storeCall(t, app, "design", revision, "a -> b") }()

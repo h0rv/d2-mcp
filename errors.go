@@ -22,6 +22,11 @@ type toolError struct {
 	Diagnostics []diagnostic `json:"diagnostics,omitempty"`
 }
 
+type errorOutput struct {
+	Status string    `json:"status"`
+	Error  toolError `json:"error"`
+}
+
 func errorResult(code string, err error) *mcp.CallToolResult {
 	var d2err *d2.Error
 	if errors.As(err, &d2err) {
@@ -38,7 +43,11 @@ func errorResult(code string, err error) *mcp.CallToolResult {
 			detail.Diagnostics = append(detail.Diagnostics, diagnostic{e.Range.Path, e.Range.Start.Line + 1, e.Range.Start.Column + 1, e.Message})
 		}
 	}
-	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: detail.Message}}, StructuredContent: map[string]any{"status": "error", "error": detail}}
+	return &mcp.CallToolResult{
+		IsError:           true,
+		Content:           []mcp.Content{&mcp.TextContent{Text: detail.Message}},
+		StructuredContent: errorOutput{Status: "error", Error: detail},
+	}
 }
 
 func documentError(err error) error {

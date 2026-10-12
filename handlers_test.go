@@ -52,12 +52,27 @@ func requireOK(t *testing.T, r *mcp.CallToolResult) {
 		t.Fatalf("tool failed: %+v", r.StructuredContent)
 	}
 }
+
+// Check structured results through their JSON boundary, just as a client does.
+func decodeOutput[T any](t *testing.T, r *mcp.CallToolResult) T {
+	t.Helper()
+	data, err := json.Marshal(r.StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output T
+	if err := json.Unmarshal(data, &output); err != nil {
+		t.Fatal(err)
+	}
+	return output
+}
+
 func requireError(t *testing.T, r *mcp.CallToolResult, code string) {
 	t.Helper()
 	if !r.IsError {
 		t.Fatalf("expected error %s", code)
 	}
-	detail := r.StructuredContent.(map[string]any)["error"].(toolError)
+	detail := decodeOutput[errorOutput](t, r).Error
 	if code != "" && detail.Code != code {
 		t.Fatalf("error=%+v; want %s", detail, code)
 	}
@@ -73,7 +88,7 @@ func TestRealRenderingLayoutsAndFormats(t *testing.T) {
 			t.Run(layout+"/"+format, func(t *testing.T) {
 				r := call(t, a, true, map[string]any{"code": "direction: right\nclient -> api: request\napi -> db\ndb.shape: cylinder", "layout": layout, "format": format, "sketch": true, "theme_id": 6, "padding": 5})
 				requireOK(t, r)
-				meta := r.StructuredContent.(map[string]any)["artifact"].(artifact)
+				meta := decodeOutput[renderOutput](t, r).Artifact
 				if meta.Bytes == 0 || len(meta.SHA256) != 64 {
 					t.Fatalf("bad artifact: %+v", meta)
 				}
@@ -104,15 +119,15 @@ func TestSourceConfigAndExplicitOverrides(t *testing.T) {
 	a := testApp(t, nil)
 	r := call(t, a, true, map[string]any{"code": "vars: {d2-config: {layout-engine: tala; theme-id: 6; sketch: true; pad: 20}}\na -> b", "format": "svg", "sketch": false, "padding": 0, "theme_id": 0})
 	requireOK(t, r)
-	o := r.StructuredContent.(map[string]any)["options"].(map[string]any)
-	if o["layout"] != "tala" || o["sketch"] != false || o["padding"] != int64(0) || o["theme_id"] != int64(0) {
+	o := decodeOutput[renderOutput](t, r).Options
+	if o.Layout != "tala" || o.Sketch != false || o.Padding != int64(0) || o.ThemeID != int64(0) {
 		t.Fatalf("options=%+v", o)
 	}
 	// A later call must not inherit mutated D2 option pointers.
 	r = call(t, a, false, map[string]any{"code": "a -> b"})
 	requireOK(t, r)
-	o = r.StructuredContent.(map[string]any)["options"].(map[string]any)
-	if o["layout"] != "dagre" || o["sketch"] != false || o["padding"] != int64(100) {
+	o = decodeOutput[compileOutput](t, r).Options
+	if o.Layout != "dagre" || o.Sketch != false || o.Padding != int64(100) {
 		t.Fatalf("leaked options=%+v", o)
 	}
 }
@@ -148,7 +163,7 @@ func TestStructuredErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) { requireError(t, call(t, a, true, tc.args), tc.code) })
 	}
 	r := call(t, a, false, map[string]any{"code": "a: {"})
-	e := r.StructuredContent.(map[string]any)["error"].(toolError)
+	e := decodeOutput[errorOutput](t, r).Error
 	if len(e.Diagnostics) == 0 || e.Diagnostics[0].Line != 1 || e.Diagnostics[0].Column < 1 {
 		t.Fatalf("diagnostics=%+v", e)
 	}
@@ -167,7 +182,7 @@ func TestFileImportsAndOutputBoundaries(t *testing.T) {
 	a := testApp(t, func(c *config) { c.InputDir = input; c.OutputDir = output })
 	r := call(t, a, true, map[string]any{"file_path": "main.d2", "format": "svg", "output_name": "diagram.svg"})
 	requireOK(t, r)
-	meta := r.StructuredContent.(map[string]any)["artifact"].(artifact)
+	meta := decodeOutput[renderOutput](t, r).Artifact
 	data, err := os.ReadFile(meta.Path)
 	if err != nil {
 		t.Fatal(err)

@@ -97,7 +97,7 @@ func TestCommittedStoreResultSurvivesCancellationRace(t *testing.T) {
 	// Cancellation cannot undo a completed backend commit. Preserve its revision
 	// so callers can reconcile the write rather than retrying an apparent failure.
 	requireOK(t, result)
-	if ctx.Err() != context.Canceled || result.StructuredContent.(map[string]any)["revision"] != "committed-1" {
+	if ctx.Err() != context.Canceled || decodeOutput[storeOutput](t, result).Revision != "committed-1" {
 		t.Fatalf("lost committed revision: %+v", result.StructuredContent)
 	}
 }

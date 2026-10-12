@@ -22,39 +22,11 @@ import (
 )
 
 var version = "1.3.0-dev"
+
 const maxRequestBytes = 2 << 20
 
 func (a *application) server() *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "d2-mcp", Version: version}, &mcp.ServerOptions{Instructions: serverInstructions})
-	properties := func(render bool) map[string]any {
-		p := map[string]any{
-			"code":          map[string]any{"type": "string", "description": "D2 source; provide exactly one of code or file_path"},
-			"file_path":     map[string]any{"type": "string", "description": "Relative .d2 path inside the server's explicit --input-dir"},
-			"layout":        map[string]any{"type": "string", "enum": []string{"dagre", "elk", "tala"}},
-			"theme_id":      map[string]any{"type": "integer", "description": "Built-in D2 theme ID (default 0)"},
-			"dark_theme_id": map[string]any{"type": "integer", "description": "Optional dark theme for SVG"},
-			"sketch":        map[string]any{"type": "boolean"},
-			"padding":       map[string]any{"type": "integer", "minimum": 0, "maximum": 1000},
-			"scale":         map[string]any{"type": "number", "minimum": 0.1, "maximum": 4},
-			"center":        map[string]any{"type": "boolean"},
-			"board_path":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "maxItems": 16, "description": "Board-kind/name pairs, e.g. [layers, overview, scenarios, failure]; omitted selects root"},
-		}
-		if a.config.Store != nil {
-			p["document_id"] = map[string]any{"type": "string", "description": "Stored complete source ID; requires revision; mutually exclusive with code and file_path"}
-			p["revision"] = map[string]any{"type": "string", "description": "Exact expected document revision from store-d2"}
-		}
-		if render {
-			p["format"] = map[string]any{"type": "string", "enum": []string{"png", "svg", "ascii"}}
-			p["ascii_mode"] = map[string]any{"type": "string", "enum": []string{"extended", "standard"}}
-			if a.output != nil {
-				p["output_name"] = map[string]any{"type": "string", "description": "Filename inside --output-dir; .png, .svg, or .txt. Exclusive creation by default."}
-				if a.config.AllowOverwrite {
-					p["overwrite"] = map[string]any{"type": "boolean", "description": "Explicitly replace output_name; requires --allow-overwrite"}
-				}
-			}
-		}
-		return p
-	}
 	closed := false
 	for _, render := range []bool{false, true} {
 		destructive := render && a.config.AllowOverwrite
@@ -62,16 +34,19 @@ func (a *application) server() *mcp.Server {
 		if render {
 			name, description, handler = "render-d2", "Render one D2 diagram to PNG, SVG, or ASCII; returns an inline artifact unless file output is requested", a.RenderD2Handler
 		}
-		sourceChoices := []any{map[string]any{"required": []string{"code"}}, map[string]any{"required": []string{"file_path"}}}
-		if a.config.Store != nil {
-			sourceChoices = append(sourceChoices, map[string]any{"required": []string{"document_id", "revision"}})
-		}
-		s.AddTool(&mcp.Tool{Name: name, Description: description,
-			InputSchema: map[string]any{"type": "object", "properties": properties(render), "additionalProperties": false, "oneOf": sourceChoices},
+		s.AddTool(&mcp.Tool{
+			Name:        name,
+			Description: description,
+			InputSchema: a.diagramInputSchema(render),
 			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: !render || a.output == nil, DestructiveHint: &destructive, OpenWorldHint: &closed, IdempotentHint: !render || a.output == nil},
 		}, handler)
 	}
-	s.AddTool(&mcp.Tool{Name: "fetch_d2_cheat_sheet", Description: "Retrieve the bundled D2 quick reference and server limits", InputSchema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}, Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closed}}, FetchD2CheatSheetHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "fetch_d2_cheat_sheet",
+		Description: "Retrieve the bundled D2 quick reference and server limits",
+		InputSchema: toolInputSchema{Type: "object", Properties: map[string]schemaProperty{}},
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closed},
+	}, FetchD2CheatSheetHandler)
 	if a.config.Store != nil {
 		a.addStoreTool(s)
 	}

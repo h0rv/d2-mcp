@@ -63,9 +63,7 @@ func (a *application) sourceWithDocument(ctx context.Context, args toolArgs) (d2
 func (a *application) addStoreTool(s *mcp.Server) {
 	closed, destructive := false, true
 	s.AddTool(&mcp.Tool{Name: "store-d2", Description: "Opt-in: store a complete self-contained D2 source using atomic revision checks. Empty expected_revision creates only; retain the returned ID and revision explicitly.",
-		InputSchema: map[string]any{"type": "object", "required": []string{"document_id", "expected_revision", "code"}, "additionalProperties": false, "properties": map[string]any{
-			"document_id": map[string]any{"type": "string"}, "expected_revision": map[string]any{"type": "string"}, "code": map[string]any{"type": "string"},
-		}}, Annotations: &mcp.ToolAnnotations{OpenWorldHint: &closed, DestructiveHint: &destructive},
+		InputSchema: storeInputSchema(), Annotations: &mcp.ToolAnnotations{OpenWorldHint: &closed, DestructiveHint: &destructive},
 	}, a.StoreD2Handler)
 }
 func (a *application) StoreD2Handler(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -109,5 +107,5 @@ func (a *application) StoreD2Handler(ctx context.Context, r *mcp.CallToolRequest
 	if doc.ID != args.ID || !validReference(doc.Revision) || doc.Revision == *args.Expected || doc.Code != args.Code {
 		return errorResult("store_failed", errors.New("store returned an invalid committed snapshot; reconcile before retrying")), nil
 	}
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Stored document %s at revision %s", doc.ID, doc.Revision)}}, StructuredContent: map[string]any{"status": "ok", "document_id": doc.ID, "revision": doc.Revision}}, nil
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("Stored document %s at revision %s", doc.ID, doc.Revision)}}, StructuredContent: storeOutput{Status: "ok", DocumentID: doc.ID, Revision: doc.Revision}}, nil
 }

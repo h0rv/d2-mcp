@@ -31,13 +31,6 @@ type toolArgs struct {
 	Overwrite  bool    `json:"overwrite,omitempty"`
 	d2.Options
 }
-type artifact struct {
-	MIMEType string `json:"mime_type"`
-	Bytes    int    `json:"bytes"`
-	SHA256   string `json:"sha256"`
-	URI      string `json:"uri"`
-	Path     string `json:"path,omitempty"`
-}
 
 func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest, render bool) (*mcp.CallToolResult, error) {
 	var args toolArgs
@@ -103,21 +96,12 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	if err := ctx.Err(); err != nil {
 		return errorResult("cancelled", err), nil
 	}
-	settings := map[string]any{"layout": prepared.Layout, "theme_id": *prepared.Options.ThemeID, "sketch": *prepared.Options.Sketch, "padding": *prepared.Options.Pad}
-	settings["board_path"] = append([]string{}, args.BoardPath...)
-	settings["center"] = *prepared.Options.Center
-	settings["scale"] = 1.0
-	if prepared.Options.Scale != nil {
-		settings["scale"] = *prepared.Options.Scale
-	}
-	if prepared.Options.DarkThemeID != nil {
-		settings["dark_theme_id"] = *prepared.Options.DarkThemeID
-	}
+	settings := resolvedOptions(prepared, args.BoardPath)
 	if !render {
 		if err := ctx.Err(); err != nil {
 			return errorResult("cancelled", err), nil
 		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "D2 script compiled successfully"}}, StructuredContent: map[string]any{"status": "ok", "valid": true, "options": settings}}, nil
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "D2 script compiled successfully"}}, StructuredContent: compileOutput{Status: "ok", Valid: true, Options: settings}}, nil
 	}
 	data, err := d2.Render(ctx, prepared, format, mode)
 	if err != nil {
@@ -159,7 +143,7 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 			return errorResult("cancelled", err), nil
 		}
 	}
-	return &mcp.CallToolResult{Content: content, StructuredContent: map[string]any{"status": "ok", "artifact": meta, "options": settings}}, nil
+	return &mcp.CallToolResult{Content: content, StructuredContent: renderOutput{Status: "ok", Artifact: meta, Options: settings}}, nil
 }
 func (a *application) CompileD2Handler(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return a.execute(ctx, r, false)
