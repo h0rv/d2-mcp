@@ -1,216 +1,200 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-var GlobalRenderFormat string
-var GlobalWriteFiles bool
-var GlobalASCIIMode string
-var supportedFormats []string
-var supportedFormatSet map[string]struct{}
+var version = "1.3.0-dev"
 
-func containsFormat(formats []string, target string) bool {
-	for _, f := range formats {
-		if f == target {
-			return true
+const maxRequestBytes = 2 << 20
+
+func (a *application) server() *mcp.Server {
+	s := mcp.NewServer(&mcp.Implementation{Name: "d2-mcp", Version: version}, &mcp.ServerOptions{Instructions: serverInstructions})
+	closed := false
+	for _, render := range []bool{false, true} {
+		destructive := render && a.config.AllowOverwrite
+		name, description, handler := "compile-d2", "Validate D2 syntax, semantics, layout, and server limits", a.CompileD2Handler
+		if render {
+			name, description, handler = "render-d2", "Render one D2 diagram to PNG, SVG, or ASCII; returns an inline artifact unless file output is requested", a.RenderD2Handler
 		}
+		s.AddTool(&mcp.Tool{
+			Name:        name,
+			Description: description,
+			InputSchema: a.diagramInputSchema(render),
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: !render || a.output == nil, DestructiveHint: &destructive, OpenWorldHint: &closed, IdempotentHint: !render || a.output == nil},
+		}, handler)
 	}
-	return false
+	s.AddTool(&mcp.Tool{
+		Name:        "fetch_d2_cheat_sheet",
+		Description: "Retrieve the bundled D2 quick reference and server limits",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closed},
+	}, FetchD2CheatSheetHandler)
+	if a.config.Store != nil {
+		a.addStoreTool(s)
+	}
+	return s
 }
 
-func buildServerTools(formats []string) []server.ServerTool {
-	formatList := strings.Join(formats, ", ")
-
-	renderOptions := []mcp.ToolOption{
-		mcp.WithDescription(fmt.Sprintf("Render a D2 diagram in %s format", formatList)),
-		mcp.WithString("code", mcp.Description("The D2 code to render (either this or file_path is required)")),
-		mcp.WithString("file_path", mcp.Description("Path to a D2 file to render (either this or code is required)")),
-		mcp.WithString("format",
-			mcp.Description(fmt.Sprintf("Optional output format override (%s)", formatList)),
-			mcp.Enum(formats...),
-		),
+func httpHandler(s *mcp.Server, transport string) http.Handler {
+	mux := http.NewServeMux()
+	getServer := func(*http.Request) *mcp.Server { return s }
+	if transport == "http" {
+		mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(getServer, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, PropagateRequestCancellation: true, MaxRequestBodyBytes: maxRequestBytes}))
+	} else {
+		legacy := mcp.NewSSEHandler(getServer, &mcp.SSEOptions{MaxRequestBodyBytes: maxRequestBytes})
+		mux.Handle("/sse", legacy)
+		mux.Handle("/message", legacy)
 	}
-
-	if containsFormat(formats, "ascii") {
-		renderOptions = append(renderOptions, mcp.WithString("ascii_mode",
-			mcp.Description("ASCII rendering mode when format=ascii (extended, standard)"),
-			mcp.Enum("extended", "standard"),
-		))
-	}
-
-	return []server.ServerTool{
-		{
-			Tool: mcp.NewTool("compile-d2",
-				mcp.WithDescription("Compile D2 code to validate and check for errors"),
-				mcp.WithString("code", mcp.Description("The D2 code to compile (either this or file_path is required)")),
-				mcp.WithString("file_path", mcp.Description("Path to a D2 file to compile (either this or code is required)")),
-			),
-			Handler: CompileD2Handler,
-		},
-		{
-			Tool:    mcp.NewTool("render-d2", renderOptions...),
-			Handler: RenderD2Handler,
-		},
-		{
-			Tool: mcp.NewTool("fetch_d2_cheat_sheet",
-				mcp.WithDescription("Retrieve the bundled D2 quick-reference cheat sheet in Markdown."),
-			),
-			Handler: FetchD2CheatSheetHandler,
-		},
-	}
+	// MCP clients do not need cross-origin browser access. Check every method,
+	// including legacy SSE GET, before handing the request to the SDK.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if origin := r.Header.Get("Origin"); origin != "" {
+			scheme := "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+			if origin != scheme+"://"+r.Host {
+				http.Error(w, "cross-origin request rejected", http.StatusForbidden)
+				return
+			}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		if r.Method == http.MethodPost && (r.URL.Path == "/mcp" || r.URL.Path == "/sse" || r.URL.Path == "/message") {
+			// A legacy batch can multiply a bounded input into thousands of
+			// buffered tool results. Admit one complete message on every version,
+			// including chunked bodies and the SDK's legacy SSE message endpoint.
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBytes))
+			_ = r.Body.Close()
+			if err != nil {
+				var tooLarge *http.MaxBytesError
+				status := http.StatusBadRequest
+				if errors.As(err, &tooLarge) {
+					status = http.StatusRequestEntityTooLarge
+				}
+				http.Error(w, "invalid or oversized MCP message", status)
+				return
+			}
+			body = bytes.TrimSpace(body)
+			if len(body) == 0 || body[0] != '{' || !json.Valid(body) {
+				http.Error(w, "send exactly one JSON-RPC object per request; batches are disabled", http.StatusBadRequest)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(body))
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
-func detectPNGSupport() bool {
-	_, err := findSVGToPNGConverter()
-	return err == nil
-}
-
-func main() {
-
+func run() error {
 	var transport string
-	flag.StringVar(&transport, "t", "stdio", "Transport type (stdio, sse, http)")
-	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, sse, http)")
-	sseFlag := flag.Bool("sse", false, "Enable SSE transport (deprecated, use --transport=sse)")
-	port := flag.Int("port", 8080, "The port to run the server on")
-	imageType := flag.String("image-type", "png", "The output format to render (png, svg, ascii)")
-	writeFiles := flag.Bool("write-files", false, "Write output files to disk when using file_path (default: return base64)")
-	asciiMode := flag.String("ascii-mode", "extended", "ASCII rendering mode when format is ascii (extended, standard)")
+	flag.StringVar(&transport, "t", "stdio", "Transport (stdio, http, sse)")
+	flag.StringVar(&transport, "transport", "stdio", "Transport (stdio, http, sse)")
+	sse := flag.Bool("sse", false, "Legacy alias for --transport=sse")
+	port := flag.Int("port", 8080, "HTTP/SSE port")
+	host := flag.String("host", "127.0.0.1", "HTTP/SSE bind address; use 0.0.0.0 explicitly in containers")
+	c := config{}
+	flag.StringVar(&c.Format, "image-type", "png", "Default output format (png, svg, ascii)")
+	flag.StringVar(&c.ASCIIMode, "ascii-mode", "extended", "ASCII connectors (extended, standard)")
+	flag.StringVar(&c.InputDir, "input-dir", "", "Allow reading .d2 files/imports inside this existing directory")
+	flag.StringVar(&c.OutputDir, "output-dir", "", "Allow creating artifacts inside this existing directory")
+	flag.StringVar(&c.AssetDir, "asset-dir", "", "Allow bounded image/icon files relative to this existing directory; no network access")
+	flag.BoolVar(&c.AllowInlineAssets, "allow-inline-assets", false, "Allow bounded base64 image/icon data URLs")
+	flag.BoolVar(&c.AllowOverwrite, "allow-overwrite", false, "Allow explicit overwrite:true with output_name inside --output-dir")
+	flag.BoolVar(&c.WriteFiles, "write-files", false, "Write file_path renders into --output-dir with unique names")
+	flag.DurationVar(&c.Timeout, "timeout", 30*time.Second, "Per-call cooperative timeout, maximum 5m")
+	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
-
-	var (
-		transportFlagSet bool
-		portFlagSet      bool
-	)
-	flag.CommandLine.Visit(func(f *flag.Flag) {
-		switch f.Name {
-		case "t", "transport":
-			transportFlagSet = true
-		case "port":
-			portFlagSet = true
+	if *showVersion {
+		fmt.Println("d2-mcp " + version + " (D2 0.9.0)")
+		return nil
+	}
+	var transportSet, portSet bool
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "t" || f.Name == "transport" {
+			transportSet = true
+		}
+		if f.Name == "port" {
+			portSet = true
 		}
 	})
-
-	if *sseFlag {
-		log.Println("Warning: --sse is deprecated, use --transport=sse instead.")
-		transport = "sse"
-	}
-
-	if !transportFlagSet && !*sseFlag {
+	if !transportSet {
 		if env := os.Getenv("MCP_TRANSPORT"); env != "" {
 			transport = env
 		}
-	}
-
-	if !transportFlagSet && !*sseFlag {
-		if env := os.Getenv("SSE_MODE"); strings.EqualFold(env, "true") {
+		if strings.EqualFold(os.Getenv("SSE_MODE"), "true") {
 			transport = "sse"
 		}
 	}
-
-	if !portFlagSet {
-		if env := os.Getenv("PORT"); env != "" {
+	if *sse {
+		transport = "sse"
+	}
+	if !portSet {
+		env := os.Getenv("PORT")
+		if env == "" {
+			env = os.Getenv("SSE_PORT")
+		}
+		if env != "" {
 			p, err := strconv.Atoi(env)
 			if err != nil {
-				log.Fatalf("Invalid PORT value: %s", env)
-			}
-			*port = p
-		} else if env := os.Getenv("SSE_PORT"); env != "" {
-			p, err := strconv.Atoi(env)
-			if err != nil {
-				log.Fatalf("Invalid SSE_PORT value: %s", env)
+				return errors.New("PORT/SSE_PORT must be an integer")
 			}
 			*port = p
 		}
 	}
-
 	transport = strings.ToLower(strings.TrimSpace(transport))
-	if transport == "" {
-		transport = "stdio"
+	if transport != "stdio" && transport != "http" && transport != "sse" {
+		return errors.New("transport must be stdio, http, or sse")
 	}
-
-	format := strings.ToLower(*imageType)
-	if format != "png" && format != "svg" && format != "ascii" {
-		log.Fatalf("Invalid render format: %s", *imageType)
+	if *port < 1 || *port > 65535 {
+		return errors.New("port must be between 1 and 65535")
 	}
-
-	mode := strings.ToLower(*asciiMode)
-	if mode != "extended" && mode != "standard" {
-		log.Fatalf("Invalid ASCII mode: %s", *asciiMode)
+	a, err := newApplication(c)
+	if err != nil {
+		return err
 	}
-
-	GlobalRenderFormat = format
-	GlobalWriteFiles = *writeFiles
-	GlobalASCIIMode = mode
-
-	// Determine supported formats based on environment/tool availability.
-	pngSupported := detectPNGSupport()
-	if !pngSupported {
-		log.Println("Warning: PNG rendering disabled; install librsvg ('rsvg-convert') to enable it.")
+	defer a.Close()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	s := a.server()
+	if transport == "stdio" {
+		return s.Run(ctx, &mcp.StdioTransport{MaxLineLength: maxRequestBytes})
 	}
-
-	allFormats := []string{"png", "svg", "ascii"}
-	supportedFormats = make([]string, 0, len(allFormats))
-	for _, f := range allFormats {
-		if f == "png" && !pngSupported {
-			continue
-		}
-		supportedFormats = append(supportedFormats, f)
+	if transport == "sse" {
+		log.Print("SSE is retained for legacy clients; prefer --transport http")
 	}
-
-	if len(supportedFormats) == 0 {
-		log.Fatal("No rendering formats available; ensure at least SVG support is enabled")
+	addr := net.JoinHostPort(*host, strconv.Itoa(*port))
+	httpServer := &http.Server{Addr: addr, Handler: httpHandler(s, transport), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	if transport == "http" {
+		httpServer.WriteTimeout = c.Timeout + 5*time.Second
 	}
-
-	supportedFormatSet = make(map[string]struct{}, len(supportedFormats))
-	for _, f := range supportedFormats {
-		supportedFormatSet[f] = struct{}{}
+	go func() {
+		<-ctx.Done()
+		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutdown)
+	}()
+	log.Printf("d2-mcp listening on %s (%s)", addr, transport)
+	err = httpServer.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
 	}
-
-	if _, ok := supportedFormatSet[GlobalRenderFormat]; !ok {
-		fallback := supportedFormats[0]
-		log.Printf("Warning: default format %s not available; falling back to %s", GlobalRenderFormat, fallback)
-		GlobalRenderFormat = fallback
-	}
-
-	s := server.NewMCPServer(
-		"d2-mcp",
-		"1.0.0",
-		server.WithLogging(),
-		server.WithInstructions(serverInstructions),
-	)
-
-	s.SetTools(buildServerTools(supportedFormats)...)
-
-	switch transport {
-	case "stdio":
-		log.Println("Starting d2-mcp service (transport: stdio)...")
-		if err := server.ServeStdio(s); err != nil {
-			log.Fatalf("Server error: %v\n", err)
-		}
-	case "sse":
-		url := fmt.Sprintf("http://localhost:%d", *port)
-		sseServer := server.NewSSEServer(s, server.WithSSEEndpoint(url))
-		log.Println("Starting d2-mcp service (transport: sse) on " + url + "...")
-		if err := sseServer.Start(fmt.Sprintf(":%d", *port)); err != nil {
-			log.Fatalf("Server error: %v\n", err)
-		}
-	case "http":
-		addr := fmt.Sprintf(":%d", *port)
-		httpServer := server.NewStreamableHTTPServer(s)
-		log.Println("Starting d2-mcp service (transport: http) on http://localhost" + addr + "/mcp ...")
-		if err := httpServer.Start(addr); err != nil {
-			log.Fatalf("Server error: %v\n", err)
-		}
-	default:
-		log.Fatalf("Invalid transport type: %s. Must be 'stdio', 'sse', or 'http'", transport)
-	}
+	return err
 }

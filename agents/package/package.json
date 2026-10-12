@@ -1,0 +1,11 @@
+{
+  "name": "d2-mcp-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "D2 diagram skill and prompts for Pi; configure its native MCP connection separately.",
+  "keywords": ["pi-package"],
+  "pi": {
+    "skills": ["./skills"],
+    "prompts": ["./prompts"]
+  }
+}

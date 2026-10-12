@@ -1,0 +1,13 @@
+{
+  "name": "d2-mcp",
+  "description": "D2 diagram tools, skill, and prompts; requires an installed d2-mcp binary.",
+  "owner": {
+    "name": "d2-mcp contributors"
+  },
+  "plugins": [
+    {
+      "name": "d2",
+      "source": "./agents/package"
+    }
+  ]
+}

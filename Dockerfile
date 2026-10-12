@@ -1,31 +1,14 @@
-FROM golang:1.25.5-alpine AS builder
-
+FROM golang:1.27.2-alpine AS builder
 WORKDIR /app
-
 COPY go.mod go.sum ./
-
 RUN go mod download && go mod verify
-
 COPY . .
-
-RUN go build -o d2-mcp .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /d2-mcp .
 
 FROM alpine:3.23
-
-# rsvg-convert rasterizes D2 SVGs to PNG. Fontconfig/DejaVu provide
-# fallback fonts when diagrams reference system fonts in addition to D2's
-# embedded WOFF fonts.
-RUN apk add --no-cache \
-    fontconfig \
-    librsvg \
-    ttf-dejavu
-
-WORKDIR /app
-
-COPY --from=builder /app/d2-mcp .
-
-# Set working directory to /data for file operations
+RUN addgroup -S d2 && adduser -S -G d2 d2 && mkdir -p /data && chown d2:d2 /data
+COPY --from=builder /d2-mcp /usr/local/bin/d2-mcp
+USER d2
 WORKDIR /data
-
 EXPOSE 8080
-ENTRYPOINT ["/app/d2-mcp"]
+ENTRYPOINT ["/usr/local/bin/d2-mcp"]
