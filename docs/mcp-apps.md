@@ -17,8 +17,8 @@ For VS Code, merge into `.vscode/mcp.json`:
 ```
 
 For remote clients, use your deployed HTTPS endpoint and its authentication.
-A remote client cannot reach your laptop's loopback address. The Cloudflare
-target currently serves ordinary tools with the viewer disabled.
+A remote client cannot reach your laptop's loopback address. The separate
+Cloudflare deployment branch serves ordinary tools with the viewer disabled.
 
 | Client | Connection instructions |
 | --- | --- |
