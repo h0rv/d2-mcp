@@ -12,7 +12,6 @@ jobs:
         working-directory: cloudflare
     env:
       WRANGLER_SEND_METRICS: 'false'
-      XDG_CONFIG_HOME: ${{ runner.temp }}/wrangler-config
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -25,6 +24,8 @@ jobs:
       - run: npm run build
       - run: npm test
       - name: Check deployable bundle without an account or upload
+        env:
+          XDG_CONFIG_HOME: ${{ runner.temp }}/wrangler-config
         run: |
           mkdir -p "$XDG_CONFIG_HOME/.wrangler"
           npx wrangler deploy --dry-run --outdir build/deploy
