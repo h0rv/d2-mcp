@@ -1,107 +1,50 @@
-# Install without a source checkout
+# Install d2-mcp
 
-End users need a prebuilt `d2-mcp` executable and their client's MCP configuration.
-They do not need this repository, Go, or the package generator. Agent skills and
-prompts are optional; see [direct GitHub client installation](agent-installation.md).
+## Current source
 
-## Available release
-
-The latest published release checked on 2026-10-10 is
-[1.2.0](https://github.com/h0rv/d2-mcp/releases/tag/1.2.0). It predates this refresh:
-it has D2 0.7.1, older options, and requires `rsvg-convert` for PNG. The refreshed
-native PNG renderer and client packages still require an authorized new release.
-Nothing in this PR publishes one.
-
-The published assets are raw executables:
-
-| Platform | Asset |
-| --- | --- |
-| Linux x86-64 | `d2-mcp-linux-amd64` |
-| Linux ARM64 | `d2-mcp-linux-arm64` |
-| macOS Intel | `d2-mcp-darwin-amd64` |
-| macOS Apple Silicon | `d2-mcp-darwin-arm64` |
-| Windows x86-64 | `d2-mcp-windows-amd64.exe` |
-
-Release 1.2.0's Linux amd64 executable requires glibc 2.34. Future release builds in this
-branch use `CGO_ENABLED=0`. Windows ARM64 and 32-bit targets are not offered.
-
-For an existing Linux x86-64 installation path, run this from any empty directory
-in a POSIX shell. It downloads only the pinned official binary and checks the
-digest obtained from GitHub's release metadata before making it executable:
+The refreshed binary is not released yet. With Go 1.27.2+, install this branch:
 
 ```sh
-curl --fail --location --proto '=https' --proto-redir '=https' \
-  --output d2-mcp-linux-amd64 \
-  https://github.com/h0rv/d2-mcp/releases/download/1.2.0/d2-mcp-linux-amd64
-printf '%s  %s\n' 6ba0fb7f79820bb1ab875414e127bd59a42719e9a73c277ca1763b4898df8b12 d2-mcp-linux-amd64 \
-  | sha256sum --check --status && chmod 755 d2-mcp-linux-amd64
+go install github.com/h0rv/d2-mcp@codex/d2-stateless-refresh
+d2-mcp --version
 ```
 
-Use the absolute path to that file as the client's `command`. Choose SVG with
-`"args": ["--image-type", "svg"]` if using 1.2.0 without its PNG converter. The
-[release API](https://api.github.com/repos/h0rv/d2-mcp/releases/tags/1.2.0) exposes
-each platform asset's SHA-256 digest. On macOS use `shasum -a 256`; on Windows use
-PowerShell `Get-FileHash -Algorithm SHA256` and compare the exact digest before
-running the downloaded executable. A checksum from this repository/GitHub checks
-integrity under that trust model; it is not independent publisher signing.
+Put `$(go env GOPATH)/bin` on PATH (PowerShell: `$(go env GOPATH)\bin`).
+From a checkout, `go build -o d2-mcp .` builds the same server.
 
-## Installer prepared for the next release
+## Published binary
 
-This branch adds a single standalone `install.py`, to be attached to the next
-release with `SHA256SUMS`. Run it with [uv](https://docs.astral.sh/uv/getting-started/installation/)
-0.13.0 or newer. Install uv independently using its prebuilt distribution; uv
-itself needs neither Python nor d2-mcp. The script declares Python 3.11+ and no
-third-party modules, so uv can select or download the interpreter. No source
-checkout, compiler, administrator access, or existing d2-mcp binary is needed.
-Download the script from the **chosen published release**, inspect it, then run
-it with that exact release tag:
+With [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.13.0+, this
+command works in a POSIX shell or PowerShell without a checkout or compiler:
 
 ```sh
-curl --fail --location --proto '=https' --proto-redir '=https' \
-  --output install.py \
-  https://github.com/h0rv/d2-mcp/releases/download/RELEASE_TAG/install.py
-# Inspect install.py before running it. Replace RELEASE_TAG with the chosen tag.
-uv run install.py --version RELEASE_TAG
+uv run https://raw.githubusercontent.com/h0rv/d2-mcp/5f547a485435a4797ffc4e2cf0e27f6c4c4bac18/scripts/install.py --version 1.2.0
 ```
 
-On Windows, download `install.py` from that release in the browser and run
-`uv run install.py --version RELEASE_TAG`. Release 1.2.0 has no installer asset:
-the download example becomes available only after a release containing this
-change is published. A reviewed copy of the new script can also install 1.2.0,
-but doing so still installs its legacy behavior. The direct executable download
-above remains available without uv or Python. The installer does not fetch this
-repository or build D2 from source.
+It verifies the platform binary's SHA-256 and prints client configuration. The
+installer is pinned to a reviewed commit; **1.2.0 is the older renderer**, without
+TALA or the new options. Use `--image-type svg` with that binary unless
+`rsvg-convert` is installed for PNG. Linux amd64 requires glibc 2.34.
 
-The installer selects the platform, fetches metadata only for the exact tag in
-`h0rv/d2-mcp`, and verifies the executable's size and SHA-256 before installation.
-It refuses missing checksums, unsupported platforms, and existing destinations
-unless `--replace` is explicit. Use `--sha256 EXPECTED_DIGEST` to pin the binary
-independently of mutable release metadata; that mode skips the metadata API and
-uses the supplied checksum with a fixed download-size ceiling. It does not run the binary, alter
-shell startup files, or edit existing client settings.
+| Platform | Supported architecture | Default directory |
+| --- | --- | --- |
+| Linux | amd64, arm64 | `~/.local/bin` |
+| macOS | Intel, Apple Silicon | `~/.local/bin` |
+| Windows | amd64 | `%LOCALAPPDATA%\d2-mcp\bin` |
 
-It prints ready-to-use MCP configuration containing the absolute installed path.
-The default is the common `mcpServers` JSON format. Use `--client codex`,
-`--client vscode`, or `--client pi` for their formats. Merge the printed entry into
-the relevant client configuration; avoid replacing a file containing other
-servers. `--dir` chooses a user-owned destination. For a later upgrade, rerun
-with the new exact `--version` and `--replace`.
+Use the printed absolute path in your client, or add that directory to its PATH.
+Add `--client codex`, `--client vscode`, or `--client pi` for its config format;
+`--dir PATH` selects a directory and `--replace` explicitly upgrades an existing
+binary. Merge the entry into existing settings. No settings or PATH are edited.
 
-The default destination is `~/.local/bin` on Linux/macOS or
-`%LOCALAPPDATA%\d2-mcp\bin` on Windows. The printed absolute path works without
-changing `PATH`. Native plugins using the bare `d2-mcp` command need that directory
-on the client's `PATH`; restart the client after changing it.
+## Run
 
-## Remote server
-
-Once an operator deploys a refreshed server, a remote client needs only its MCP
-endpoint configuration. It needs no executable, Python, source, or local diagram
-files. For example, where the client accepts `mcpServers`:
-
-```json
-{"mcpServers":{"d2":{"type":"http","url":"https://YOUR_SERVER/mcp"}}}
+```sh
+d2-mcp --transport stdio
+# Or serve stateless HTTP on loopback:
+d2-mcp --transport http --port 8080
 ```
 
-Replace the example with an actual operator-provided endpoint. This repository
-does not supply a hosted endpoint. Send complete D2 in `code`; optional document
-handles require a separately configured backend.
+Connect to `http://127.0.0.1:8080/mcp`. For remote use, supply TLS and
+authentication; the native server has no built-in authentication.
+See [client commands](agent-installation.md) and [Cloudflare](cloudflare.md).

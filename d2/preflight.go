@@ -419,17 +419,13 @@ func attributeTree(n d2ast.Node, prefix []string, allowClass bool) bool {
 }
 func subtreeCost(n d2ast.Node) (int, int) {
 	nodes, size := 0, 0
-	stack := []d2ast.Node{n}
-	for len(stack) > 0 {
-		last := len(stack) - 1
-		n = stack[last]
-		stack = stack[:last]
+	d2ast.Walk(n, func(n d2ast.Node) bool {
 		nodes++
 		if scalar, ok := n.(d2ast.Scalar); ok {
 			size += len(scalar.ScalarString())
 		}
-		stack = append(stack, n.Children()...)
-	}
+		return true
+	})
 	return nodes, size
 }
 

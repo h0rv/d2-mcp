@@ -191,8 +191,38 @@ func (a *assetLoader) load(source *url.URL) (*url.URL, error) {
 	return result, nil
 }
 
+// visitIcons covers every occurrence, including repeated and legend icons.
+func visitIcons(diagram *d2target.Diagram, visit func(**url.URL) error) error {
+	if err := visit(&diagram.Root.Icon); err != nil {
+		return err
+	}
+	for i := range diagram.Shapes {
+		if err := visit(&diagram.Shapes[i].Icon); err != nil {
+			return err
+		}
+	}
+	for i := range diagram.Connections {
+		if err := visit(&diagram.Connections[i].Icon); err != nil {
+			return err
+		}
+	}
+	if diagram.Legend != nil {
+		for i := range diagram.Legend.Shapes {
+			if err := visit(&diagram.Legend.Shapes[i].Icon); err != nil {
+				return err
+			}
+		}
+		for i := range diagram.Legend.Connections {
+			if err := visit(&diagram.Legend.Connections[i].Icon); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (a *assetLoader) embed(diagram *d2target.Diagram) error {
-	convert := func(icon **url.URL) error {
+	return visitIcons(diagram, func(icon **url.URL) error {
 		if *icon == nil {
 			return nil
 		}
@@ -201,64 +231,21 @@ func (a *assetLoader) embed(diagram *d2target.Diagram) error {
 			*icon = resolved
 		}
 		return err
-	}
-	if err := convert(&diagram.Root.Icon); err != nil {
-		return err
-	}
-	for i := range diagram.Shapes {
-		if err := convert(&diagram.Shapes[i].Icon); err != nil {
-			return err
-		}
-	}
-	for i := range diagram.Connections {
-		if err := convert(&diagram.Connections[i].Icon); err != nil {
-			return err
-		}
-	}
-	if diagram.Legend != nil {
-		for i := range diagram.Legend.Shapes {
-			if err := convert(&diagram.Legend.Shapes[i].Icon); err != nil {
-				return err
-			}
-		}
-		for i := range diagram.Legend.Connections {
-			if err := convert(&diagram.Legend.Connections[i].Icon); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	})
 }
 
-// SVG repeats embedded data at each use, unlike the native scene's asset table.
-// Reserve twice each occurrence for renderer paths that emit an icon twice, and
-// leave half the artifact budget for the surrounding geometry, fonts, and text.
+// SVG duplicates inline images; reserve half the artifact budget for geometry.
 func checkSVGAssetExpansion(diagram *d2target.Diagram) error {
 	total := 0
-	add := func(icon *url.URL) {
-		if icon != nil {
-			total += 2 * (len(icon.Scheme) + 1 + len(icon.Opaque) + len(icon.Path))
+	return visitIcons(diagram, func(icon **url.URL) error {
+		if value := *icon; value != nil {
+			total += 2 * (len(value.Scheme) + 1 + len(value.Opaque) + len(value.Path))
 		}
-	}
-	add(diagram.Root.Icon)
-	for _, shape := range diagram.Shapes {
-		add(shape.Icon)
-	}
-	for _, edge := range diagram.Connections {
-		add(edge.Icon)
-	}
-	if diagram.Legend != nil {
-		for _, shape := range diagram.Legend.Shapes {
-			add(shape.Icon)
+		if total > MaxArtifactBytes/2 {
+			return failure("limit_exceeded", "repeated SVG image assets exceed the 8 MiB expansion budget; use smaller assets, fewer repeats, or PNG")
 		}
-		for _, edge := range diagram.Legend.Connections {
-			add(edge.Icon)
-		}
-	}
-	if total > MaxArtifactBytes/2 {
-		return failure("limit_exceeded", "repeated SVG image assets exceed the 8 MiB expansion budget; use smaller assets, fewer repeats, or PNG")
-	}
-	return nil
+		return nil
+	})
 }
 
 type noAssetNetwork struct{}

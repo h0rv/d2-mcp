@@ -5,12 +5,5 @@
   "author": {
     "name": "d2-mcp contributors"
   },
-  "repository": "https://github.com/h0rv/d2-mcp",
-  "license": "MIT",
-  "keywords": [
-    "diagrams",
-    "d2",
-    "mcp"
-  ],
   "commands": "./prompts/"
 }

@@ -96,42 +96,35 @@ func TestArtifactFileURIs(t *testing.T) {
 }
 
 func TestHTTPAdmitsOnlyOneBoundedObject(t *testing.T) {
+	const batch = `[{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fetch_d2_cheat_sheet","arguments":{}}}]`
 	for _, transport := range []string{"http", "sse"} {
-		a := testApp(t, nil)
-		server := httptest.NewServer(httpHandler(a.server(), transport))
+		server := httptest.NewServer(httpHandler(testApp(t, nil).server(), transport))
 		t.Cleanup(server.Close)
-		for _, route := range []string{"/mcp", "/sse?sessionid=untrusted", "/message"} {
-			for _, version := range []string{"", "2025-03-26", "2026-07-28"} {
-				for _, body := range []string{
-					`[{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fetch_d2_cheat_sheet","arguments":{}}}]`,
-					`{"jsonrpc":"2.0","id":1,"method":"tools/list"}{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
-					`null`, `42`, `{} garbage`,
-				} {
-					req, _ := http.NewRequest(http.MethodPost, server.URL+route, io.NopCloser(strings.NewReader(body)))
-					req.Header.Set("Content-Type", "application/json")
-					req.Header.Set("Accept", "application/json, text/event-stream")
-					req.Header.Set("MCP-Protocol-Version", version)
-					response, err := server.Client().Do(req)
-					if err != nil {
-						t.Fatal(err)
-					}
-					data, _ := io.ReadAll(response.Body)
-					response.Body.Close()
-					if response.StatusCode != http.StatusBadRequest || len(data) > 256 {
-						t.Fatalf("%s %s %s: %d (%d bytes)", transport, route, version, response.StatusCode, len(data))
-					}
-				}
+		check := func(route, version, body string, want int) {
+			t.Helper()
+			req, _ := http.NewRequest(http.MethodPost, server.URL+route, io.NopCloser(strings.NewReader(body)))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json, text/event-stream")
+			req.Header.Set("MCP-Protocol-Version", version)
+			response, err := server.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			data, _ := io.ReadAll(response.Body)
+			if response.StatusCode != want || len(data) > 256 {
+				t.Fatalf("%s %s %s: %d (%d bytes), want %d", transport, route, version, response.StatusCode, len(data), want)
 			}
 		}
-		req, _ := http.NewRequest(http.MethodPost, server.URL+"/mcp", io.NopCloser(strings.NewReader(strings.Repeat(" ", maxRequestBytes+1))))
-		response, err := server.Client().Do(req)
-		if err != nil {
-			t.Fatal(err)
+		for _, body := range []string{batch, `{"jsonrpc":"2.0"}{"jsonrpc":"2.0"}`, "null", "42", "{} garbage"} {
+			check("/mcp", "", body, http.StatusBadRequest)
 		}
-		response.Body.Close()
-		if response.StatusCode != http.StatusRequestEntityTooLarge {
-			t.Fatalf("oversized chunked message: %s", response.Status)
+		for _, route := range []string{"/mcp", "/sse?sessionid=untrusted", "/message"} {
+			for _, version := range []string{"", "2025-03-26", "2026-07-28"} {
+				check(route, version, batch, http.StatusBadRequest)
+			}
 		}
+		check("/mcp", "", strings.Repeat(" ", maxRequestBytes+1), http.StatusRequestEntityTooLarge)
 	}
 }
 

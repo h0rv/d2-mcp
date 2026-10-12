@@ -2,38 +2,11 @@
 
 A small Go MCP server for validating and rendering [D2](https://d2lang.com/) diagrams. Send complete source and rendering options; receive PNG, SVG, or text. The default server keeps no documents, artifacts, or HTTP sessions. It needs no D2 executable, browser, or PNG converter.
 
-This branch uses **D2 0.9.0**, **Go 1.27.2**, and the official **Go MCP SDK 1.8.0**. D2's Dagre, ELK, and open-source TALA layouts are bundled. See [compatibility changes](#compatibility-with-12) before upgrading from 1.2.
+This branch uses **D2 0.9.0**, **Go 1.27.2**, and the official **Go MCP SDK 1.8.0**. D2's Dagre, ELK, and open-source TALA layouts are bundled. See [inputs and limits](docs/compatibility.md).
 
 ## Install
 
-**No source checkout or compiler is needed.** Use a prebuilt executable from
-[Releases](https://github.com/h0rv/d2-mcp/releases), verify its checksum, and point
-your MCP client at it. The [short installation guide](docs/installation.md)
-includes a pinned download and the standalone installer prepared for the next
-release. The installer selects your platform, verifies the binary, and prints
-client configuration without editing existing settings.
-
-Published `1.2.0` predates this refresh and still needs an external converter for
-PNG. Native PNG and the direct GitHub agent packages below become generally
-available after a new release; this PR does not publish one.
-
-To build the checked-out source with Go 1.27.2 or newer:
-
-```sh
-go build -o d2-mcp .
-./d2-mcp --version
-```
-
-### Agent skills and plugins
-
-Install optional skills and prompts through the clients' native GitHub package
-mechanisms. Follow the [Claude Code, Codex, and Pi guide](docs/agent-installation.md).
-Basic setup uses the installed `d2-mcp` command and needs no cloned repository or
-package-generation step. For a deployed remote server, configure its MCP URL
-directly. No hosted endpoint is assumed.
-
-The repository's Python package generator remains available for maintainers and
-custom paths/endpoints; it is not required for normal installation.
+Follow [install commands](docs/installation.md), then [connect Claude, Codex, Pi, or VS Code](docs/agent-installation.md). The refreshed renderer is not released yet; the guide distinguishes building this branch from installing the older published binary.
 
 ## Clients and transports
 
@@ -89,12 +62,7 @@ Example `tools/call` parameters:
   "name": "render-d2",
   "arguments": {
     "code": "direction: right\nclient -> api -> database\ndatabase.shape: cylinder",
-    "layout": "tala",
-    "format": "png",
-    "theme_id": 0,
-    "sketch": false,
-    "padding": 40,
-    "scale": 1
+    "format": "png"
   }
 }
 ```
@@ -186,9 +154,7 @@ Retain the returned ID and revision explicitly, then send both:
 {"name":"render-d2","arguments":{"document_id":"architecture","revision":"RETURNED_REVISION","format":"svg"}}
 ```
 
-A stale revision returns `revision_conflict`; missing IDs return `document_not_found`. Tests create a document through one application instance, render through another sharing the adapter, reject concurrent stale writes, and verify that an unrelated backend cannot resolve the handle. IDs work only across instances sharing the same backend, namespace, and authorization policy. They are not portable credentials. Sending complete `code` and options remains portable across unrelated servers supporting the same D2 version and limits.
-
-Arbitrary MCP result metadata is not automatically saved or echoed by clients. `requestState` belongs to continuation of one multi-step protocol request; it is not a document store. This server does not manufacture continuation requests or signed tokens to retain documents. Choosing a production backend and wiring authenticated request context are deployment work outside this adapter.
+A stale revision returns `revision_conflict`; a missing ID returns `document_not_found`. Handles work only with the same backend and authorization policy. No backend is installed by the shipped binary.
 
 ## Docker
 
@@ -202,25 +168,6 @@ docker run --rm -i -v "$PWD/diagrams:/data:ro" d2-mcp --input-dir /data
 ```
 
 The image runs as a non-root user and includes the statically built Go server. For writable bind mounts, use `--user "$(id -u):$(id -g)"` and provision output-directory ownership. No librsvg, browser, or external layout plugin is installed.
-
-## Compatibility with 1.2
-
-- Tool names, `code`/`file_path`, PNG default, stdio default, format overrides, and legacy transport flags remain.
-- D2 moved from `oss.terrastruct.com/d2` to `github.com/d2lang/d2`; Go 1.27.2 is required by this build. MCP moved from mark3labs to the official Go SDK.
-- Rendering now uses D2 defaults. For the old appearance request `layout: "dagre"`, `theme_id: 6`, `sketch: true`, `padding: 5`. Native PNG may differ in rasterization from librsvg.
-- PNG is always available without an external converter. SVG content changes from an MCP image to an embedded resource containing the original XML.
-- Both source arguments together are now an error. File input requires `--input-dir`; automatic file output also requires `--output-dir`. Arbitrary absolute input paths are now disallowed; replacement requires both server and request opt-ins.
-- HTTP is stateless and binds loopback; specify `--host 0.0.0.0` for container networking. Legacy SSE still requires a continuous connection and uses the message URL supplied by the SDK.
-- Send one JSON-RPC object per HTTP POST; legacy batches are rejected. Compilation uses the bounded subset above, so deeply nested or structurally generated diagrams may need to be flattened by the client.
-- Local/inline images are preserved through explicit asset opt-ins and normalized embedding; network references are rejected. Multi-board sources retain root output by default and gain exact board selection. See the [verified compatibility matrix](docs/compatibility.md) for 1.2.0 behavior and migration examples.
-
-### Appearance comparison
-
-The same [example source](examples/architecture.d2), rendered with D2 0.9.0 native PNG using the old d2-mcp settings and the new D2 defaults. This illustrates settings changes; it is not a pixel comparison with the old librsvg renderer.
-
-| Previous appearance settings | Current defaults |
-| --- | --- |
-| ![GrapeSoda, sketch, padding 5](docs/images/legacy-settings.png) | ![Neutral theme, no sketch, padding 100](docs/images/current-default.png) |
 
 ## Development
 
@@ -243,6 +190,4 @@ D2_MCP_TEST_BINARY="$PWD/d2-mcp" uv run agents/test_build.py -v
 npx @modelcontextprotocol/inspector ./d2-mcp
 ```
 
-Tests decode real native PNGs, check SVG/ASCII, exercise all three layouts, source configuration and explicit overrides, inherited board selection, bounded image embedding, rooted imports and file replacement, structured failures, concurrent rendering, stateless HTTP across instances, current/legacy MCP negotiation, SSE, a real stdio subprocess, and the optional storage adapter. CI runs the Go suite on Linux, macOS, and Windows, checks generated agent packages through real MCP calls, and builds all five release targets. On each native runner, it installs the matching binary outside the checkout through a controlled download fixture and exercises version metadata, Unicode paths, rooted files, output replacement, and native PNG/ELK and ASCII/TALA. Pull requests publish no release; future release publication waits for these checks.
-
-The [current Cloudflare compatibility recheck](docs/cloudflare.md) records local Wasm feasibility and its limits. It supplies no hosting or storage backend.
+CI runs Go race/vet tests, native Linux/macOS/Windows installation and MCP checks, five target builds, and the non-root container. See [Cloudflare deployment](docs/cloudflare.md) for the optional Worker target.

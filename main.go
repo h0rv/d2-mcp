@@ -44,7 +44,7 @@ func (a *application) server() *mcp.Server {
 	s.AddTool(&mcp.Tool{
 		Name:        "fetch_d2_cheat_sheet",
 		Description: "Retrieve the bundled D2 quick reference and server limits",
-		InputSchema: toolInputSchema{Type: "object", Properties: map[string]schemaProperty{}},
+		InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closed},
 	}, FetchD2CheatSheetHandler)
 	if a.config.Store != nil {
@@ -197,9 +197,4 @@ func run() error {
 		return nil
 	}
 	return err
-}
-func main() {
-	if err := run(); err != nil {
-		log.Fatal(err)
-	}
 }
