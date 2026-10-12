@@ -188,8 +188,10 @@ The image runs as a non-root user and includes the statically built Go server. F
 
 ## Development
 
-Implementation, tests and release tooling use Go. Client manifests are static
-JSON; CI uses YAML and short shell commands. No Python or Node setup is needed.
+Native implementation, tests and release tooling use Go. Client manifests are
+static JSON; CI uses YAML and short shell commands. Native development needs no
+Python or Node. Optional browser and provider adapters use JavaScript and Node
+tooling; their setup guides list the additional build and test commands.
 
 ```sh
 go test ./...
