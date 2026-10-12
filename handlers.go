@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -20,53 +19,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type toolArgs struct {
-	Code       *string `json:"code,omitempty"`
-	DocumentID string  `json:"document_id,omitempty"`
-	Revision   string  `json:"revision,omitempty"`
-	FilePath   *string `json:"file_path,omitempty"`
-	Format     string  `json:"format,omitempty"`
-	ASCIIMode  string  `json:"ascii_mode,omitempty"`
-	OutputName string  `json:"output_name,omitempty"`
-	Overwrite  bool    `json:"overwrite,omitempty"`
-	d2.Options
-}
-
 func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest, render bool) (*mcp.CallToolResult, error) {
-	var args toolArgs
-	decoder := json.NewDecoder(bytes.NewReader(request.Params.Arguments))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&args); err != nil {
+	args, err := a.parseToolRequest(request.Params.Arguments, render)
+	if err != nil {
 		return errorResult("invalid_arguments", err), nil
-	}
-	if !render && (args.Format != "" || args.ASCIIMode != "" || args.OutputName != "" || args.Overwrite) {
-		return errorResult("invalid_arguments", errors.New("format, ascii_mode, output_name, and overwrite apply only to render-d2")), nil
-	}
-	format := a.config.Format
-	if args.Format != "" {
-		format = strings.ToLower(args.Format)
-	}
-	if format != "png" && format != "svg" && format != "ascii" {
-		return errorResult("invalid_arguments", errors.New("format must be png, svg, or ascii")), nil
-	}
-	mode := a.config.ASCIIMode
-	if args.ASCIIMode != "" {
-		mode = strings.ToLower(args.ASCIIMode)
-	}
-	switch mode {
-	case "ascii":
-		mode = "standard"
-	case "unicode":
-		mode = "extended"
-	}
-	if mode != "standard" && mode != "extended" {
-		return errorResult("invalid_arguments", errors.New("ascii_mode must be extended or standard")), nil
-	}
-	if args.OutputName != "" && a.output == nil {
-		return errorResult("file_access_denied", errors.New("output_name requires --output-dir")), nil
-	}
-	if args.Overwrite && (!a.config.AllowOverwrite || args.OutputName == "") {
-		return errorResult("file_access_denied", errors.New("overwrite requires --allow-overwrite and an explicit output_name")), nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, a.config.Timeout)
 	defer cancel()
@@ -81,33 +37,33 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	default:
 		return errorResult("busy", errors.New("renderer is busy; retry later")), nil
 	}
-	source, err := a.sourceWithDocument(ctx, args)
+	source, err := a.sourceWithDocument(ctx, args.source)
 	if err != nil {
 		return errorResult("invalid_arguments", err), nil
 	}
-	if a.assets != nil && args.DocumentID == "" {
+	if a.assets != nil && args.source.documentID == "" {
 		source.Assets = a.assets.FS()
 	}
 	source.InlineAssets = a.config.AllowInlineAssets
-	prepared, err := d2.Prepare(ctx, source, args.Options)
+	prepared, err := d2.Prepare(ctx, source, args.options)
 	if err != nil {
 		return errorResult("invalid_d2", err), nil
 	}
 	if err := ctx.Err(); err != nil {
 		return errorResult("cancelled", err), nil
 	}
-	settings := resolvedOptions(prepared, args.BoardPath)
+	settings := resolvedOptions(prepared, args.options.BoardPath)
 	if !render {
 		if err := ctx.Err(); err != nil {
 			return errorResult("cancelled", err), nil
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "D2 script compiled successfully"}}, StructuredContent: compileOutput{Status: "ok", Valid: true, Options: settings}}, nil
 	}
-	data, err := d2.Render(ctx, prepared, format, mode)
+	data, err := d2.Render(ctx, prepared, args.format.name, args.asciiMode)
 	if err != nil {
 		return errorResult("render_failed", err), nil
 	}
-	if format == "svg" {
+	if args.format.name == "svg" {
 		if err := checkSVG(data); err != nil {
 			return errorResult("unsupported_feature", err), nil
 		}
@@ -115,23 +71,23 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	if err := ctx.Err(); err != nil {
 		return errorResult("cancelled", err), nil
 	}
-	mime := map[string]string{"png": "image/png", "svg": "image/svg+xml", "ascii": "text/plain"}[format]
+	mime := args.format.mimeType
 	digest := sha256.Sum256(data)
 	meta := artifact{MIMEType: mime, Bytes: len(data), SHA256: hex.EncodeToString(digest[:])}
 	meta.URI = "urn:sha256:" + meta.SHA256
 	var content []mcp.Content
-	if args.OutputName != "" || (a.config.WriteFiles && args.FilePath != nil) {
+	if args.outputName != "" || (a.config.WriteFiles && args.source.filePath != nil) {
 		if err := ctx.Err(); err != nil {
 			return errorResult("cancelled", err), nil
 		}
-		meta.Path, err = a.writeArtifact(ctx, args.OutputName, format, data, args.Overwrite)
+		meta.Path, err = a.writeArtifact(ctx, args.outputName, args.format.name, data, args.overwrite)
 		if err != nil {
 			return errorResult("write_failed", err), nil
 		}
 		meta.URI = artifactFileURI(filepath.ToSlash(meta.Path))
 		content = []mcp.Content{&mcp.TextContent{Text: "D2 diagram rendered to: " + meta.Path}, &mcp.ResourceLink{URI: meta.URI, Name: filepath.Base(meta.Path), MIMEType: mime, Size: ptr(int64(len(data)))}}
 	} else {
-		switch format {
+		switch args.format.name {
 		case "png":
 			content = []mcp.Content{&mcp.ImageContent{Data: data, MIMEType: mime}}
 		case "svg":

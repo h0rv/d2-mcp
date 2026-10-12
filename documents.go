@@ -32,30 +32,30 @@ type noImports struct{}
 func (noImports) Open(string) (fs.File, error) {
 	return nil, errors.New("stored documents must be self-contained; imports are disabled")
 }
-func (a *application) sourceWithDocument(ctx context.Context, args toolArgs) (d2.Source, error) {
+func (a *application) sourceWithDocument(ctx context.Context, args sourceInput) (d2.Source, error) {
 	if err := ctx.Err(); err != nil {
 		return d2.Source{}, err
 	}
-	if args.DocumentID == "" && args.Revision == "" {
+	if args.documentID == "" && args.revision == "" {
 		return a.source(args)
 	}
 	if a.config.Store == nil {
 		return d2.Source{}, errors.New("document storage is not configured")
 	}
-	if args.Code != nil || args.FilePath != nil || !validReference(args.DocumentID) || !validReference(args.Revision) {
+	if args.code != nil || args.filePath != nil || !validReference(args.documentID) || !validReference(args.revision) {
 		return d2.Source{}, errors.New("provide document_id and revision without code or file_path")
 	}
-	doc, err := a.config.Store.Get(ctx, args.DocumentID)
+	doc, err := a.config.Store.Get(ctx, args.documentID)
 	if err != nil {
 		return d2.Source{}, documentError(err)
 	}
 	if err := ctx.Err(); err != nil {
 		return d2.Source{}, err
 	}
-	if doc.Revision != args.Revision {
+	if doc.Revision != args.revision {
 		return d2.Source{}, documentError(document.ErrConflict)
 	}
-	if doc.ID != args.DocumentID || len(doc.Code) > d2.MaxSourceBytes || strings.TrimSpace(doc.Code) == "" {
+	if doc.ID != args.documentID || len(doc.Code) > d2.MaxSourceBytes || strings.TrimSpace(doc.Code) == "" {
 		return d2.Source{}, documentError(errors.New("invalid snapshot"))
 	}
 	return d2.Source{Code: doc.Code, Path: "input.d2", FS: noImports{}}, nil

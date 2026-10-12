@@ -89,22 +89,22 @@ func (i sourceInfo) ModTime() time.Time { return time.Time{} }
 func (i sourceInfo) IsDir() bool        { return false }
 func (i sourceInfo) Sys() any           { return nil }
 
-func (a *application) source(args toolArgs) (d2.Source, error) {
-	if (args.Code == nil) == (args.FilePath == nil) {
+func (a *application) source(args sourceInput) (d2.Source, error) {
+	if (args.code == nil) == (args.filePath == nil) {
 		return d2.Source{}, errors.New("provide exactly one of code or file_path")
 	}
 	snapshot := &sourceFS{root: a.input, files: make(map[string][]byte), remaining: d2.MaxSourceBytes}
 	name := "input.d2"
 	var code string
-	if args.Code != nil {
-		code = *args.Code
+	if args.code != nil {
+		code = *args.code
 		if len(code) > d2.MaxSourceBytes {
 			return d2.Source{}, errors.New("source exceeds 256 KiB")
 		}
 		snapshot.remaining -= len(code)
 		snapshot.files[name] = []byte(code)
 	} else {
-		name = *args.FilePath
+		name = *args.filePath
 		f, err := snapshot.Open(name)
 		if err != nil {
 			return d2.Source{}, err
