@@ -30,6 +30,9 @@ test('hosts without download capability still display an inert preview and sourc
 });
 
 test('Copy D2 writes the exact source with the requested clipboard permission', async ({ page, context, viewer, harnessServer }) => {
+  // Model a browser that grants the host's delegated clipboard-write request.
+  // Keep the separate denial test in the same opaque sandbox without a grant.
+  await context.grantPermissions(['clipboard-write']);
   const frame = await viewer(undefined, { clipboardWrite: {} });
   const source = 'users -> API: café\nAPI -> database';
   await sendInput(page, { code: source, theme_id: 6, layout: 'tala', file_path: '/private', output_name: 'private.svg' });
