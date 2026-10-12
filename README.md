@@ -171,23 +171,19 @@ The image runs as a non-root user and includes the statically built Go server. F
 
 ## Development
 
-Python tooling uses [uv](https://docs.astral.sh/uv/getting-started/installation/)
-0.13.0 or newer and Python 3.11+. Each script declares its interpreter requirement
-and has no third-party dependencies. uv selects or downloads a compatible Python;
-no Python project installation is needed. CI pins uv 0.13.0 and tests Python 3.11
-and 3.13. Python subprocess helpers reuse the interpreter selected by uv.
+Implementation, tests and release tooling use Go. Client manifests are static
+JSON; CI uses YAML and short shell commands. No Python or Node setup is needed.
 
 ```sh
 go test ./...
 go test -race ./...
 go vet ./...
 go build ./...
-uv run scripts/test_install.py -v
-uv run agents/test_build.py -v
-# Include real MCP package checks after building the server:
+# Exercise the exact binary outside the checkout:
 go build -o d2-mcp .
-D2_MCP_TEST_BINARY="$PWD/d2-mcp" uv run agents/test_build.py -v
-npx @modelcontextprotocol/inspector ./d2-mcp
+D2_MCP_TEST_BINARY="$PWD/d2-mcp" go test -run TestDistribution -v .
 ```
 
-CI runs Go race/vet tests, native Linux/macOS/Windows installation and MCP checks, five target builds, and the non-root container. See [Cloudflare deployment](docs/cloudflare.md) for the optional Worker target.
+CI runs Go race/vet tests, native Linux/macOS/Windows artifact and MCP checks,
+five target builds, checksum verification and the non-root container. Optional
+browser UI and provider deployment adapters are developed in separate PRs.

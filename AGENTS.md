@@ -9,9 +9,8 @@ The Go entry point lives in `main.go`, which wires CLI and SSE flags and registe
 - `go run . --transport http --port 8080`: start the streamable HTTP transport for MCP clients.
 - `go run . --transport stdio --image-type ascii`: default stdio transport tuned for LLM-friendly ASCII output.
 - `go test ./...`: execute all Go unit tests; add `-v` locally when stabilising flaky cases.
-- `uv run scripts/test_install.py -v` and `uv run agents/test_build.py -v`: run dependency-free Python checks with Python 3.11+; use uv 0.13.0 or newer for all Python tooling. Script metadata selects the interpreter. Set `D2_MCP_TEST_BINARY` to a built binary for real agent-package MCP checks.
+- `D2_MCP_TEST_BINARY=/absolute/path/d2-mcp go test -run TestDistribution -v .`: exercise an exact native binary and static client package outside the checkout. CI runs this on Linux, macOS and Windows.
 - `docker build . -t d2-mcp`: produce the container image that matches production runners.
-- `npx @modelcontextprotocol/inspector ./d2-mcp`: inspect tool contracts during MCP client debugging.
 
 ## Coding Style & Naming Conventions
 Use `gofmt` (tabs, 2-space visual indent) and `goimports` before submitting patches; the repo's files follow canonical Go formatting. Name handler functions with `*Handler` (e.g., `RenderD2Handler`) and prefer request-local options and application-owned configuration over mutable globals. Go packages should stay singular and lowercase (`d2`, `server`), and new flags must use descriptive kebab-case names to match existing CLI expectations.

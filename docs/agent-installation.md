@@ -74,16 +74,6 @@ In PowerShell use `$env:D2_MCP_URL`. Configure authentication using the client's
 OAuth/header settings, never credentials in the URL. Send complete `code`;
 file paths refer to the server's machine. No hosted endpoint is supplied.
 
-## Custom plugin configuration
-
-From a checkout, generate a new bundle for an absolute binary path or remote URL:
-
-```sh
-uv run agents/build.py --local-command /absolute/path/d2-mcp --output ./agents/build/local
-uv run agents/build.py --url "$D2_MCP_URL" --output ./agents/build/remote
-```
-
-Requires uv 0.13+ / Python 3.11+. Install the generated directory as a Claude or
-Codex marketplace, or use its `configs/` snippets. The destination must be new;
-generation never changes client settings. All clients share the same skill and
-prompts; small manifests adapt each client's required format without symlinks.
+For an absolute binary path or custom remote endpoint, use the direct client
+commands above. The optional static plugins use `d2-mcp` on PATH. All clients
+share one copy of the skill and prompts; no package generator is needed.

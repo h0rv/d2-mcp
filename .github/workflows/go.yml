@@ -3,49 +3,17 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, codex/d2-stateless-refresh]
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
 permissions:
   contents: read
+env:
+  BUILD_VERSION: ${{ inputs.version || '0.0.0-ci' }}
 jobs:
-  installer:
-    needs: cross-build
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            python: '3.11'
-          - os: macos-latest
-            python: '3.13'
-          - os: windows-latest
-            python: '3.13'
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: '0.13.0'
-          enable-cache: false
-          python-version: ${{ matrix.python }}
-      - uses: actions/setup-go@v5
-        if: runner.os != 'Linux'
-        with:
-          go-version-file: go.mod
-      - name: Check standalone installer and platform handling
-        run: uv run --no-project -m unittest discover -s scripts -v
-      - name: Exercise native rendering, transports, and rooted files
-        if: runner.os != 'Linux'
-        run: go test -count=1 ./...
-      - name: Select native release artifact
-        id: platform
-        shell: bash
-        run: |
-          uv run --no-project python -c 'import sys; sys.path.insert(0, "scripts"); import install; print("asset=" + install.asset_for_platform()); print("target=" + install.asset_for_platform().removeprefix("d2-mcp-").removesuffix(".exe"))' >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v4
-        with:
-          name: binary-${{ steps.platform.outputs.target }}
-          path: release
-      - name: Install exact artifact outside checkout and exercise MCP
-        run: uv run scripts/check_artifact.py --binary release/${{ steps.platform.outputs.asset }} --version 0.0.0-ci
   test:
     runs-on: ubuntu-latest
     steps:
@@ -57,15 +25,6 @@ jobs:
       - run: go vet ./...
       - run: go test -race -count=1 ./...
       - run: go build ./...
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: '0.13.0'
-          enable-cache: false
-          python-version: '3.11'
-      - name: Validate agent packages and real MCP connections
-        run: |
-          go build -o d2-mcp .
-          D2_MCP_TEST_BINARY="$PWD/d2-mcp" uv run --no-project -m unittest discover -s agents -v
   cross-build:
     runs-on: ubuntu-latest
     strategy:
@@ -81,12 +40,13 @@ jobs:
           TARGET: ${{ matrix.target }}
           CGO_ENABLED: '0'
         run: |
+          go run ./internal/release -version "$BUILD_VERSION"
           export GOOS="${TARGET%/*}"
           export GOARCH="${TARGET#*/}"
           suffix=""
           if [ "$GOOS" = windows ]; then suffix=".exe"; fi
           mkdir -p release
-          go build -trimpath -ldflags '-X main.version=0.0.0-ci' -o "release/d2-mcp-$GOOS-$GOARCH$suffix" .
+          go build -trimpath -ldflags "-X main.version=$BUILD_VERSION" -o "release/d2-mcp-$GOOS-$GOARCH$suffix" .
           echo "target=$GOOS-$GOARCH" >> "$GITHUB_OUTPUT"
         id: build
       - uses: actions/upload-artifact@v4
@@ -95,6 +55,78 @@ jobs:
           path: release/*
           if-no-files-found: error
           retention-days: 1
+  checksums:
+    needs: cross-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: release
+      - run: go run ./internal/release -version "$BUILD_VERSION" -dir release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
+  native:
+    needs: checksums
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Select native artifact
+        id: platform
+        shell: bash
+        run: |
+          target="$(go env GOOS)-$(go env GOARCH)"
+          suffix=""
+          if [ "$RUNNER_OS" = Windows ]; then suffix=".exe"; fi
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "asset=d2-mcp-$target$suffix" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ steps.platform.outputs.target }}
+          path: release
+      - uses: actions/download-artifact@v4
+        with:
+          name: checksums
+          path: release
+      - name: Verify Linux download checksum
+        if: runner.os == 'Linux'
+        working-directory: release
+        run: sha256sum --check --ignore-missing SHA256SUMS
+      - name: Verify macOS download checksum
+        if: runner.os == 'macOS'
+        working-directory: release
+        run: shasum --algorithm 256 --check --ignore-missing SHA256SUMS
+      - name: Verify Windows download checksum
+        if: runner.os == 'Windows'
+        working-directory: release
+        shell: pwsh
+        run: |
+          $asset = 'd2-mcp-windows-amd64.exe'
+          $expected = ((Select-String -SimpleMatch "  $asset" SHA256SUMS).Line -split ' ')[0]
+          if ((Get-FileHash $asset -Algorithm SHA256).Hash -ne $expected) { throw 'SHA-256 mismatch' }
+      - name: Exercise native rendering, transports and rooted files
+        if: runner.os != 'Linux'
+        run: go test -count=1 ./...
+      - name: Exercise exact binary and static package outside checkout
+        env:
+          D2_MCP_TEST_BINARY: ${{ github.workspace }}/release/${{ steps.platform.outputs.asset }}
+          D2_MCP_TEST_VERSION: ${{ env.BUILD_VERSION }}
+        run: go test -count=1 -run TestDistribution -v .
   container:
     runs-on: ubuntu-latest
     steps:

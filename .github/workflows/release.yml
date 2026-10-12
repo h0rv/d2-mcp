@@ -1,157 +1,30 @@
 name: Build Release
-
 on:
   push:
     tags: ['*']
-
 permissions:
   contents: read
-
 jobs:
-  test-installer:
-    needs: build-and-release
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            python: '3.11'
-          - os: macos-latest
-            python: '3.13'
-          - os: windows-latest
-            python: '3.13'
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: '0.13.0'
-          enable-cache: false
-          python-version: ${{ matrix.python }}
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Test standalone release installer
-        run: uv run --no-project -m unittest discover -s scripts -p "test_*.py" -v
-      - name: Exercise native rendering, transports, and rooted files
-        run: go test -count=1 ./...
-      - name: Select native release artifact
-        id: platform
-        shell: bash
-        run: |
-          uv run --no-project python -c 'import sys; sys.path.insert(0, "scripts"); import install; print("asset=" + install.asset_for_platform()); print("target=" + install.asset_for_platform().removeprefix("d2-mcp-").removesuffix(".exe"))' >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v4
-        with:
-          name: binary-${{ steps.platform.outputs.target }}
-          path: release
-      - name: Install exact artifact outside checkout and exercise MCP
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
-          RELEASE_ASSET: ${{ steps.platform.outputs.asset }}
-        shell: bash
-        run: uv run scripts/check_artifact.py --binary "release/$RELEASE_ASSET" --version "$RELEASE_VERSION"
-
-  build-and-release:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            filename: d2-mcp-linux-amd64
-          - goos: linux
-            goarch: arm64
-            filename: d2-mcp-linux-arm64
-          - goos: darwin
-            goarch: amd64
-            filename: d2-mcp-darwin-amd64
-          - goos: darwin
-            goarch: arm64
-            filename: d2-mcp-darwin-arm64
-          - goos: windows
-            goarch: amd64
-            filename: d2-mcp-windows-amd64.exe
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: '0.13.0'
-          enable-cache: false
-          python-version: '3.11'
-
-      - name: Create release directory
-        run: mkdir -p release
-      
-      - name: Build for ${{ matrix.goos }}-${{ matrix.goarch }}
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: '0'
-          RELEASE_VERSION: ${{ github.ref_name }}
-        run: |
-          uv run --no-project python - <<'PY'
-          import os, re
-          tag = os.environ['RELEASE_VERSION']
-          if not re.fullmatch(r'v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?', tag):
-              raise SystemExit('Release tag must be an exact version, such as 1.3.0 or 1.3.0-rc.1')
-          PY
-          go build -trimpath -ldflags "-X main.version=$RELEASE_VERSION" -o release/${{ matrix.filename }}
-      
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: release/${{ matrix.filename }}
-          if-no-files-found: error
-
+  validate:
+    uses: ./.github/workflows/go.yml
+    with:
+      version: ${{ github.ref_name }}
   create-release:
-    needs: [build-and-release, test-installer]
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: '0.13.0'
-          enable-cache: false
-          python-version: '3.11'
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           pattern: binary-*
           merge-multiple: true
           path: release
-
-      - name: Include standalone installer and checksums
-        run: |
-          cp scripts/install.py release/install.py
-          uv run --no-project python - <<'PY'
-          import hashlib
-          from pathlib import Path
-          directory = Path('release')
-          names = [
-              'd2-mcp-linux-amd64', 'd2-mcp-linux-arm64',
-              'd2-mcp-darwin-amd64', 'd2-mcp-darwin-arm64',
-              'd2-mcp-windows-amd64.exe', 'install.py',
-          ]
-          lines = []
-          for name in sorted(names):
-              digest = hashlib.sha256((directory / name).read_bytes()).hexdigest()
-              lines.append(f'{digest}  {name}\n')
-          (directory / 'SHA256SUMS').write_text(''.join(lines), encoding='ascii')
-          PY
-      
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/download-artifact@v4
+        with:
+          name: checksums
+          path: release
+      - uses: softprops/action-gh-release@v2
         with:
           files: release/*
           fail_on_unmatched_files: true
