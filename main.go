@@ -50,6 +50,9 @@ func (a *application) server() *mcp.Server {
 	if a.config.Store != nil {
 		a.addStoreTool(s)
 	}
+	if a.config.UI {
+		addDiagramApp(s)
+	}
 	return s
 }
 
@@ -111,6 +114,7 @@ func run() error {
 	port := flag.Int("port", 8080, "HTTP/SSE port")
 	host := flag.String("host", "127.0.0.1", "HTTP/SSE bind address; use 0.0.0.0 explicitly in containers")
 	c := config{}
+	flag.BoolVar(&c.UI, "ui", false, "Offer the optional MCP Apps diagram viewer to compatible hosts")
 	flag.StringVar(&c.Format, "image-type", "png", "Default output format (png, svg, ascii)")
 	flag.StringVar(&c.ASCIIMode, "ascii-mode", "extended", "ASCII connectors (extended, standard)")
 	flag.StringVar(&c.InputDir, "input-dir", "", "Allow reading .d2 files/imports inside this existing directory")

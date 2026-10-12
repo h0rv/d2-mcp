@@ -1,3 +1,6 @@
 .git
 d2-mcp
 *.out
+apps/node_modules
+apps/test-results
+apps/playwright-report

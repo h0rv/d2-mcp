@@ -14,6 +14,7 @@ import (
 type config struct {
 	Format, ASCIIMode, InputDir, OutputDir, AssetDir string
 	WriteFiles                                       bool
+	UI                                               bool
 	AllowOverwrite, AllowInlineAssets                bool
 	Timeout                                          time.Duration
 	Store                                            document.Store

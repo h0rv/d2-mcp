@@ -47,6 +47,23 @@ Legacy SSE remains available at `/sse` with `--transport sse` (or `--sse`). Its 
 
 HTTP binds to loopback by default, rejects cross-origin browser requests, and retains the SDK's localhost/DNS-rebinding protection. There is no built-in authentication or multi-user authorization. If exposing it beyond a trusted local environment, supply authentication, TLS, request limits, and process resource limits in your deployment. No public hosting is configured by this repository.
 
+### Optional diagram viewer
+
+Add `--ui` to offer a bundled [MCP Apps viewer](docs/mcp-apps.md) to compatible
+hosts. It previews inline diagrams, supports pan/zoom and complete-source
+rerenders, and offers PNG/source downloads when the host advertises them.
+The flag defaults to off. Ordinary tool names, results, and stateless HTTP
+behavior are unchanged; no Node runtime, website, or download store is needed.
+
+```sh
+./d2-mcp --transport http --host 127.0.0.1 --port 8080 --ui
+```
+
+Connect to `/mcp` using the client's custom MCP configuration. A remote host
+needs your operator-provided HTTPS endpoint, not a marketplace listing.
+Client availability and download support vary; see the guide's evidence and
+limitations. This feature is unreleased and is not in the published 1.2.0 binary.
+
 ## Tools
 
 - `compile-d2`: validate syntax, semantics, layout, and server limits, with located diagnostics when available.
