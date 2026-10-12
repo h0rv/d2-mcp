@@ -25,20 +25,6 @@ func validReference(s string) bool {
 	}
 	return true
 }
-func documentError(err error) error {
-	code := "store_failed"
-	message := "document store failed"
-	if errors.Is(err, document.ErrNotFound) {
-		code, message = "document_not_found", err.Error()
-	}
-	if errors.Is(err, document.ErrConflict) {
-		code, message = "revision_conflict", err.Error()
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return err
-	}
-	return &d2.Error{Code: code, Message: message}
-}
 
 // Stored documents are portable complete sources: no server-local imports.
 type noImports struct{}

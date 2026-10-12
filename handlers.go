@@ -13,85 +13,12 @@ import (
 	"image/png"
 	"io"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/d2lang/d2/d2parser"
 	"github.com/h0rv/d2-mcp/d2"
-	"github.com/h0rv/d2-mcp/document"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-type config struct {
-	Format, ASCIIMode, InputDir, OutputDir, AssetDir string
-	WriteFiles                                       bool
-	AllowOverwrite, AllowInlineAssets                bool
-	Timeout                                          time.Duration
-	Store                                            document.Store
-}
-type application struct {
-	config                config
-	input, output, assets *os.Root
-	outputPath            string
-	slots                 chan struct{}
-}
-
-func newApplication(c config) (*application, error) {
-	if c.Format != "png" && c.Format != "svg" && c.Format != "ascii" {
-		return nil, errors.New("image-type must be png, svg, or ascii")
-	}
-	if c.ASCIIMode != "extended" && c.ASCIIMode != "standard" {
-		return nil, errors.New("ascii-mode must be extended or standard")
-	}
-	if c.Timeout <= 0 || c.Timeout > 5*time.Minute {
-		return nil, errors.New("timeout must be positive and at most 5m")
-	}
-	if c.WriteFiles && c.OutputDir == "" {
-		return nil, errors.New("--write-files requires --output-dir")
-	}
-	if c.AllowOverwrite && c.OutputDir == "" {
-		return nil, errors.New("--allow-overwrite requires --output-dir")
-	}
-	a := &application{config: c, slots: make(chan struct{}, 2)}
-	var err error
-	if c.InputDir != "" {
-		a.input, err = os.OpenRoot(c.InputDir)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if c.OutputDir != "" {
-		a.outputPath, err = filepath.Abs(c.OutputDir)
-		if err == nil {
-			a.output, err = os.OpenRoot(a.outputPath)
-		}
-		if err != nil {
-			a.Close()
-			return nil, err
-		}
-	}
-	if c.AssetDir != "" {
-		a.assets, err = os.OpenRoot(c.AssetDir)
-		if err != nil {
-			a.Close()
-			return nil, err
-		}
-	}
-	return a, nil
-}
-func (a *application) Close() {
-	if a.input != nil {
-		a.input.Close()
-	}
-	if a.output != nil {
-		a.output.Close()
-	}
-	if a.assets != nil {
-		a.assets.Close()
-	}
-}
 
 type toolArgs struct {
 	Code       *string `json:"code,omitempty"`
@@ -104,42 +31,12 @@ type toolArgs struct {
 	Overwrite  bool    `json:"overwrite,omitempty"`
 	d2.Options
 }
-type diagnostic struct {
-	Path    string `json:"path"`
-	Line    int    `json:"line"`
-	Column  int    `json:"column"`
-	Message string `json:"message"`
-}
-type toolError struct {
-	Code        string       `json:"code"`
-	Message     string       `json:"message"`
-	Diagnostics []diagnostic `json:"diagnostics,omitempty"`
-}
 type artifact struct {
 	MIMEType string `json:"mime_type"`
 	Bytes    int    `json:"bytes"`
 	SHA256   string `json:"sha256"`
 	URI      string `json:"uri"`
 	Path     string `json:"path,omitempty"`
-}
-
-func errorResult(code string, err error) *mcp.CallToolResult {
-	var d2err *d2.Error
-	if errors.As(err, &d2err) {
-		code = d2err.Code
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		code = "cancelled"
-	}
-	detail := toolError{Code: code, Message: err.Error()}
-	var parse *d2parser.ParseError
-	if errors.As(err, &parse) {
-		detail.Code = "invalid_d2"
-		for _, e := range parse.Errors {
-			detail.Diagnostics = append(detail.Diagnostics, diagnostic{e.Range.Path, e.Range.Start.Line + 1, e.Range.Start.Column + 1, e.Message})
-		}
-	}
-	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: detail.Message}}, StructuredContent: map[string]any{"status": "error", "error": detail}}
 }
 
 func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest, render bool) (*mcp.CallToolResult, error) {
