@@ -21,6 +21,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	handler := httpHandler(app.server(), "http")
 	js.Global().Set("d2MCP", js.FuncOf(func(_ js.Value, args []js.Value) any {
 		input, signal := args[0].String(), args[1]
@@ -37,13 +38,18 @@ func main() {
 				} else {
 					ctx, cancel := context.WithCancel(context.Background())
 					defer cancel()
-					abort := js.FuncOf(func(js.Value, []js.Value) any { cancel(); return nil })
+
+					abort := js.FuncOf(func(js.Value, []js.Value) any {
+						cancel()
+						return nil
+					})
 					defer abort.Release()
 					signal.Call("addEventListener", "abort", abort)
 					defer signal.Call("removeEventListener", "abort", abort)
 					if signal.Get("aborted").Bool() {
 						cancel()
 					}
+
 					request, err := http.NewRequestWithContext(ctx, envelope.Method, envelope.URL, strings.NewReader(envelope.Body))
 					if err != nil {
 						http.Error(response, "invalid HTTP request", http.StatusBadRequest)
@@ -57,6 +63,7 @@ func main() {
 						handler.ServeHTTP(response, request)
 					}
 				}
+
 				result := struct {
 					Status  int         `json:"status"`
 					Headers http.Header `json:"headers"`
@@ -70,5 +77,6 @@ func main() {
 		defer executor.Release()
 		return js.Global().Get("Promise").New(executor)
 	}))
+
 	select {}
 }
