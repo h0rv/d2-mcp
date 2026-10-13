@@ -101,12 +101,15 @@ func (a *application) execute(ctx context.Context, request *mcp.CallToolRequest,
 	}
 	return &mcp.CallToolResult{Content: content, StructuredContent: renderOutput{Status: "ok", Artifact: meta, Options: settings}}, nil
 }
+
 func (a *application) CompileD2Handler(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return a.execute(ctx, r, false)
 }
+
 func (a *application) RenderD2Handler(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return a.execute(ctx, r, true)
 }
+
 func FetchD2CheatSheetHandler(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	sheet, err := loadCheatSheet()
 	if err != nil {

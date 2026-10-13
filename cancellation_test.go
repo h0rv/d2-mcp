@@ -48,6 +48,7 @@ func (s *uninterruptibleGetStore) Get(context.Context, string) (document.Documen
 	<-s.release
 	return document.Document{ID: "diagram", Revision: "different", Code: "a"}, nil
 }
+
 func (*uninterruptibleGetStore) Put(context.Context, string, string, string) (document.Document, error) {
 	panic("unexpected write")
 }
@@ -79,6 +80,7 @@ type commitThenCancelStore struct{ cancel context.CancelFunc }
 func (commitThenCancelStore) Get(context.Context, string) (document.Document, error) {
 	panic("unexpected read")
 }
+
 func (s commitThenCancelStore) Put(_ context.Context, id, _, code string) (document.Document, error) {
 	doc := document.Document{ID: id, Revision: "committed-1", Code: code}
 	s.cancel()

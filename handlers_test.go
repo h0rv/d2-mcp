@@ -34,6 +34,7 @@ func testApp(t *testing.T, change func(*config)) *application {
 	t.Cleanup(a.Close)
 	return a
 }
+
 func call(t *testing.T, a *application, render bool, args any) *mcp.CallToolResult {
 	t.Helper()
 	data, err := json.Marshal(args)
@@ -46,6 +47,7 @@ func call(t *testing.T, a *application, render bool, args any) *mcp.CallToolResu
 	}
 	return result
 }
+
 func requireOK(t *testing.T, r *mcp.CallToolResult) {
 	t.Helper()
 	if r.IsError {
@@ -115,6 +117,7 @@ func TestRealRenderingLayoutsAndFormats(t *testing.T) {
 		}
 	}
 }
+
 func TestSourceConfigAndExplicitOverrides(t *testing.T) {
 	a := testApp(t, nil)
 	r := call(t, a, true, map[string]any{"code": "vars: {d2-config: {layout-engine: tala; theme-id: 6; sketch: true; pad: 20}}\na -> b", "format": "svg", "sketch": false, "padding": 0, "theme_id": 0})
@@ -131,6 +134,7 @@ func TestSourceConfigAndExplicitOverrides(t *testing.T) {
 		t.Fatalf("leaked options=%+v", o)
 	}
 }
+
 func TestStructuredErrors(t *testing.T) {
 	a := testApp(t, nil)
 	for _, tc := range []struct {
@@ -168,6 +172,7 @@ func TestStructuredErrors(t *testing.T) {
 		t.Fatalf("diagnostics=%+v", e)
 	}
 }
+
 func TestFileImportsAndOutputBoundaries(t *testing.T) {
 	input, output, outside := t.TempDir(), t.TempDir(), t.TempDir()
 	for name, data := range map[string]string{"main.d2": "...@common.d2\na -> b", "common.d2": "a: Imported"} {
@@ -209,6 +214,7 @@ func TestFileImportsAndOutputBoundaries(t *testing.T) {
 		t.Fatal("outside file modified")
 	}
 }
+
 func TestCancellationAndBusy(t *testing.T) {
 	a := testApp(t, nil)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -224,6 +230,7 @@ func TestCancellationAndBusy(t *testing.T) {
 	<-a.slots
 	<-a.slots
 }
+
 func TestConcurrentRendering(t *testing.T) {
 	a := testApp(t, nil)
 	var wg sync.WaitGroup
@@ -235,6 +242,7 @@ func TestConcurrentRendering(t *testing.T) {
 	}
 	wg.Wait()
 }
+
 func TestASCIIModes(t *testing.T) {
 	a := testApp(t, nil)
 	r := call(t, a, true, map[string]any{"code": "a -> b", "format": "ascii", "ascii_mode": "standard"})

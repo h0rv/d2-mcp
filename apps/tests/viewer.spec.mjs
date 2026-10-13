@@ -1,22 +1,42 @@
 import { test, expect, svg, svgResult, textResult, sendInput, sendResult } from './harness.mjs';
 
-test('standard handshake permits viewing without tool capabilities in an opaque sandbox', async ({ page, viewer }) => {
+test('standard handshake permits viewing without tool capabilities in an opaque sandbox', async ({
+  page,
+  viewer,
+}) => {
   const frame = await viewer();
   await expect(frame.locator('#copy-source')).toBeDisabled();
   await sendInput(page);
   await expect(frame.locator('#copy-source')).toBeEnabled();
-  const initialize = await page.evaluate(() => window.harness.messages.find((m) => m.method === 'ui/initialize'));
+  const initialize = await page.evaluate(() =>
+    window.harness.messages.find((m) => m.method === 'ui/initialize'),
+  );
   expect(initialize.params.appInfo.name).toBe('d2-viewer');
   expect(initialize.params.protocolVersion).toBeTruthy();
   expect(await page.locator('#viewer').getAttribute('sandbox')).toBe('allow-scripts');
-  expect(await frame.locator('body').evaluate(() => {
-    try { void parent.document.body; return 'accessible'; } catch { return 'opaque'; }
-  })).toBe('opaque');
-  expect(await page.evaluate(() => window.harness.messages.filter((m) => m.method === 'ui/notifications/initialized').length)).toBe(1);
+  expect(
+    await frame.locator('body').evaluate(() => {
+      try {
+        void parent.document.body;
+        return 'accessible';
+      } catch {
+        return 'opaque';
+      }
+    }),
+  ).toBe('opaque');
+  expect(
+    await page.evaluate(
+      () =>
+        window.harness.messages.filter((m) => m.method === 'ui/notifications/initialized').length,
+    ),
+  ).toBe(1);
   await expect(frame.locator('#render, #cancel, select, [contenteditable=true]')).toHaveCount(0);
 });
 
-test('hosts without download capability still display an inert preview and source', async ({ page, viewer }) => {
+test('hosts without download capability still display an inert preview and source', async ({
+  page,
+  viewer,
+}) => {
   const frame = await viewer({});
   await sendInput(page);
   await sendResult(page, svgResult());
@@ -29,13 +49,24 @@ test('hosts without download capability still display an inert preview and sourc
   expect(await page.evaluate(() => window.harness.calls.length)).toBe(0);
 });
 
-test('Copy D2 writes the exact source with the requested clipboard permission', async ({ page, context, viewer, harnessServer }) => {
+test('Copy D2 writes the exact source with the requested clipboard permission', async ({
+  page,
+  context,
+  viewer,
+  harnessServer,
+}) => {
   // Model a browser that grants the host's delegated clipboard-write request.
   // Keep the separate denial test in the same opaque sandbox without a grant.
   await context.grantPermissions(['clipboard-write']);
   const frame = await viewer(undefined, { clipboardWrite: {} });
   const source = 'users -> API: café\nAPI -> database';
-  await sendInput(page, { code: source, theme_id: 6, layout: 'tala', file_path: '/private', output_name: 'private.svg' });
+  await sendInput(page, {
+    code: source,
+    theme_id: 6,
+    layout: 'tala',
+    file_path: '/private',
+    output_name: 'private.svg',
+  });
   await expect(frame.locator('#source-panel')).not.toHaveAttribute('open');
   await frame.locator('summary').click();
   await expect(frame.locator('#source')).toHaveAttribute('readonly', '');
@@ -58,15 +89,25 @@ test('clipboard denial selects read-only source for manual copying', async ({ pa
   await frame.locator('#copy-source').click();
   await expect(frame.locator('#status')).toContainText('Press Ctrl+C or ⌘C');
   await expect(frame.locator('#source')).toBeFocused();
-  expect(await frame.locator('#source').evaluate((el) => el.value.slice(el.selectionStart, el.selectionEnd))).toBe(source);
+  expect(
+    await frame
+      .locator('#source')
+      .evaluate((el) => el.value.slice(el.selectionStart, el.selectionEnd)),
+  ).toBe(source);
   expect(await page.evaluate(() => window.harness.calls)).toEqual([]);
 });
 
-test('file and document inputs are not fetched, and source limits count UTF-8 bytes', async ({ page, viewer }) => {
+test('file and document inputs are not fetched, and source limits count UTF-8 bytes', async ({
+  page,
+  viewer,
+}) => {
   const frame = await viewer();
   await sendInput(page, { code: 'old -> diagram' });
   await expect(frame.locator('#source')).toHaveValue('old -> diagram');
-  for (const args of [{ file_path: '/private/source.d2', document_id: 'secret', revision: '1' }, { code: 'é'.repeat(131_073) }]) {
+  for (const args of [
+    { file_path: '/private/source.d2', document_id: 'secret', revision: '1' },
+    { code: 'é'.repeat(131_073) },
+  ]) {
     await sendInput(page, args);
     await expect(frame.locator('#source')).toHaveValue('');
     await expect(frame.locator('#source-panel')).toBeHidden();
@@ -77,23 +118,40 @@ test('file and document inputs are not fetched, and source limits count UTF-8 by
   expect(await page.evaluate(() => window.harness.downloads.length)).toBe(0);
 });
 
-test('new host input and cancellation discard an earlier image decode', async ({ page, viewer }) => {
+test('new host input and cancellation discard an earlier image decode', async ({
+  page,
+  viewer,
+}) => {
   const frame = await viewer();
   await sendInput(page);
   // Hold the browser's real decode at its promise boundary to force the race.
   await frame.locator('body').evaluate(() => {
     const decode = HTMLImageElement.prototype.decode;
+
     HTMLImageElement.prototype.decode = function () {
-      return decode.call(this).then(() => new Promise((resolve) => { globalThis.finishDecode = resolve; }));
+      return decode.call(this).then(
+        () =>
+          new Promise((resolve) => {
+            globalThis.finishDecode = resolve;
+          }),
+      );
     };
-    globalThis.restoreDecode = () => { HTMLImageElement.prototype.decode = decode; };
+
+    globalThis.restoreDecode = () => {
+      HTMLImageElement.prototype.decode = decode;
+    };
   });
   await sendResult(page, svgResult());
-  await expect.poll(() => frame.locator('body').evaluate(() => typeof globalThis.finishDecode)).toBe('function');
+  await expect
+    .poll(() => frame.locator('body').evaluate(() => typeof globalThis.finishDecode))
+    .toBe('function');
   await sendInput(page, { code: 'new -> diagram' });
   await sendResult(page, textResult('New host result'));
   await expect(frame.locator('#ascii')).toHaveText('New host result');
-  await frame.locator('body').evaluate(() => { globalThis.restoreDecode(); globalThis.finishDecode(); });
+  await frame.locator('body').evaluate(() => {
+    globalThis.restoreDecode();
+    globalThis.finishDecode();
+  });
   await expect(frame.locator('#diagram')).toBeHidden();
   await expect(frame.locator('#ascii')).toHaveText('New host result');
   await sendResult(page, svgResult());
@@ -105,21 +163,31 @@ test('new host input and cancellation discard an earlier image decode', async ({
 
 test('source, ASCII and structured errors remain literal text', async ({ page, viewer }) => {
   const frame = await viewer();
-  const payload = '<img src="https://attacker.invalid/x" onerror="globalThis.compromised=true"><script>globalThis.compromised=true</script>';
+  const payload =
+    '<img src="https://attacker.invalid/x" onerror="globalThis.compromised=true"><script>globalThis.compromised=true</script>';
   await sendInput(page, { code: payload });
   await expect(frame.locator('#source')).toHaveValue(payload);
   await sendResult(page, textResult(payload));
   await expect(frame.locator('#ascii')).toHaveText(payload);
   expect(await frame.locator('#ascii *').count()).toBe(0);
-  await sendResult(page, { isError: true, content: [{ type: 'text', text: 'Fallback error' }], structuredContent: { error: { message: payload } } });
+  await sendResult(page, {
+    isError: true,
+    content: [{ type: 'text', text: 'Fallback error' }],
+    structuredContent: { error: { message: payload } },
+  });
   await expect(frame.locator('#status')).toHaveText(payload);
   expect(await frame.locator('#status *').count()).toBe(0);
   expect(await frame.locator('body').evaluate(() => globalThis.compromised)).toBeUndefined();
 });
 
-test('hostile SVG stays an inert image without script execution or external requests', async ({ page, viewer }) => {
+test('hostile SVG stays an inert image without script execution or external requests', async ({
+  page,
+  viewer,
+}) => {
   const external = [];
-  page.on('request', (request) => { if (request.url().includes('attacker.invalid')) external.push(request.url()); });
+  page.on('request', (request) => {
+    if (request.url().includes('attacker.invalid')) external.push(request.url());
+  });
   const frame = await viewer();
   await sendInput(page);
   const hostile = svg(`<script>parent.postMessage({compromised:true},'*')</script>
@@ -136,47 +204,109 @@ test('hostile SVG stays an inert image without script execution or external requ
   expect(await page.locator('img, svg, foreignObject').count()).toBe(0);
 });
 
-test('cross-window spoofed messages and malformed parent messages cannot replace results', async ({ page, viewer, harnessServer }) => {
+test('cross-window spoofed messages and malformed parent messages cannot replace results', async ({
+  page,
+  viewer,
+  harnessServer,
+}) => {
   const frame = await viewer();
   await sendInput(page);
   await sendResult(page, textResult('Trusted host result'));
   await expect(frame.locator('#ascii')).toHaveText('Trusted host result');
   await page.evaluate((url) => {
     const sibling = document.createElement('iframe');
-    sibling.id = 'sibling'; sibling.src = `${url}/sibling`; document.body.append(sibling);
+    sibling.id = 'sibling';
+    sibling.src = `${url}/sibling`;
+    document.body.append(sibling);
   }, harnessServer.url);
   const sibling = page.frameLocator('#sibling');
-  await expect.poll(() => sibling.locator('html').evaluate(() => document.title)).toBe('Unrelated sibling frame');
+  await expect
+    .poll(() => sibling.locator('html').evaluate(() => document.title))
+    .toBe('Unrelated sibling frame');
   await sibling.locator('body').evaluate(() => {
-    parent.frames[0].postMessage({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: { content: [{ type: 'text', text: 'SPOOFED' }] } }, '*');
-    parent.frames[0].postMessage({ jsonrpc: '2.0', method: 'ui/notifications/tool-input', params: { arguments: { code: 'SPOOFED SOURCE' } } }, '*');
+    parent.frames[0].postMessage(
+      {
+        jsonrpc: '2.0',
+        method: 'ui/notifications/tool-result',
+        params: { content: [{ type: 'text', text: 'SPOOFED' }] },
+      },
+      '*',
+    );
+    parent.frames[0].postMessage(
+      {
+        jsonrpc: '2.0',
+        method: 'ui/notifications/tool-input',
+        params: { arguments: { code: 'SPOOFED SOURCE' } },
+      },
+      '*',
+    );
   });
   await page.evaluate(() => {
-    window.harness.raw({ jsonrpc: '1.0', method: 'ui/notifications/tool-result', params: { content: [{ type: 'text', text: 'MALFORMED' }] } });
+    window.harness.raw({
+      jsonrpc: '1.0',
+      method: 'ui/notifications/tool-result',
+      params: { content: [{ type: 'text', text: 'MALFORMED' }] },
+    });
     window.harness.raw('not JSON-RPC');
   });
   // A legitimate later notification acts as a message-order barrier.
-  await page.evaluate(() => window.harness.raw({ jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: { theme: 'dark' } }));
+  await page.evaluate(() =>
+    window.harness.raw({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: { theme: 'dark' },
+    }),
+  );
   await expect(frame.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(frame.locator('#ascii')).toHaveText('Trusted host result');
   await expect(frame.locator('#source')).toHaveValue('a -> b');
 });
 
-test('malformed and oversized images fail safely, then a valid result recovers', async ({ page, viewer }) => {
+test('malformed and oversized images fail safely, then a valid result recovers', async ({
+  page,
+  viewer,
+}) => {
   const frame = await viewer();
   await sendInput(page);
   const fakePNG = Buffer.alloc(33);
   Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]).copy(fakePNG);
-  fakePNG.writeUInt32BE(100_000, 16); fakePNG.writeUInt32BE(100_000, 20);
+  fakePNG.writeUInt32BE(100_000, 16);
+  fakePNG.writeUInt32BE(100_000, 20);
   const cases = [
     [svgResult('<!DOCTYPE svg [<!ENTITY x "hello">]>' + svg()), 'declarations'],
     [svgResult(svg('', 100_000, 100_000)), 'dimensions'],
     [svgResult('<svg xmlns="http://www.w3.org/2000/svg" width="NaN" height="20"/>'), 'dimensions'],
     [svgResult('<svg broken'), 'invalid SVG'],
     [svgResult(svg(' '.repeat(2 * 1024 * 1024))), '2 MiB'],
-    [{ content: [{ type: 'image', mimeType: 'image/png', data: Buffer.from('not a PNG').toString('base64') }] }, 'invalid PNG'],
-    [{ content: [{ type: 'image', mimeType: 'image/png', data: fakePNG.toString('base64') }] }, 'dimensions'],
-    [{ content: [{ type: 'resource_link', uri: 'file:///private/diagram.svg', name: 'diagram.svg', mimeType: 'image/svg+xml' }] }, 'No inline preview'],
+    [
+      {
+        content: [
+          {
+            type: 'image',
+            mimeType: 'image/png',
+            data: Buffer.from('not a PNG').toString('base64'),
+          },
+        ],
+      },
+      'invalid PNG',
+    ],
+    [
+      { content: [{ type: 'image', mimeType: 'image/png', data: fakePNG.toString('base64') }] },
+      'dimensions',
+    ],
+    [
+      {
+        content: [
+          {
+            type: 'resource_link',
+            uri: 'file:///private/diagram.svg',
+            name: 'diagram.svg',
+            mimeType: 'image/svg+xml',
+          },
+        ],
+      },
+      'No inline preview',
+    ],
   ];
   for (const [result, message] of cases) {
     await sendResult(page, result);
@@ -188,10 +318,16 @@ test('malformed and oversized images fail safely, then a valid result recovers',
   await expect(frame.locator('#diagram')).toBeVisible();
 });
 
-test('canonical PNG downloads use the host and handle decline, failure and late completion', async ({ page, viewer }) => {
+test('canonical PNG downloads use the host and handle decline, failure and late completion', async ({
+  page,
+  viewer,
+}) => {
   const frame = await viewer();
   await sendInput(page);
-  await sendResult(page, svgResult(svg('<rect width="200" height="100" fill="red"/><script>alert(1)</script>')));
+  await sendResult(
+    page,
+    svgResult(svg('<rect width="200" height="100" fill="red"/><script>alert(1)</script>')),
+  );
   await expect(frame.locator('#diagram')).toBeVisible();
   await frame.locator('#download-image').click();
   await expect.poll(() => page.evaluate(() => window.harness.downloads.length)).toBe(1);
@@ -203,15 +339,23 @@ test('canonical PNG downloads use the host and handle decline, failure and late 
   expect(png.readUInt32BE(16)).toBe(200);
   expect(png.readUInt32BE(20)).toBe(100);
   expect(png.includes(Buffer.from('<script>'))).toBe(false);
-  await page.evaluate(() => { window.harness.downloadResult = { isError: true }; });
+  await page.evaluate(() => {
+    window.harness.downloadResult = { isError: true };
+  });
   await frame.locator('#download-image').click();
   await expect(frame.locator('#status')).toContainText('declined or cancelled');
-  await page.evaluate(() => { window.harness.downloadError = 'Host download unavailable'; });
+  await page.evaluate(() => {
+    window.harness.downloadError = 'Host download unavailable';
+  });
   await frame.locator('#download-image').click();
   await expect(frame.locator('#status')).toContainText('Host download unavailable');
-  await page.evaluate(() => { window.harness.deferDownload = true; });
+  await page.evaluate(() => {
+    window.harness.deferDownload = true;
+  });
   await frame.locator('#download-image').click();
-  await expect.poll(() => page.evaluate(() => typeof window.harness.finishDownload)).toBe('function');
+  await expect
+    .poll(() => page.evaluate(() => typeof window.harness.finishDownload))
+    .toBe('function');
   await sendInput(page, { code: 'new -> diagram' });
   await sendResult(page, textResult('New host result'));
   await expect(frame.locator('#status')).toHaveText('Text result received.');
@@ -249,37 +393,72 @@ test('zoom, pan, fit and teardown operate on the current preview', async ({ page
   await expect(frame.locator('#diagram')).not.toHaveAttribute('src');
 });
 
-test('real Go server artifacts preserve D2 themes across layouts, PNG, ASCII and errors', async ({ page, viewer, harnessServer }, testInfo) => {
-  if (process.env.CI) expect(harnessServer.realServer, 'CI must set D2_MCP_TEST_BINARY to a built Go server.').toBe(true);
-  test.skip(!harnessServer.realServer, 'Set D2_MCP_TEST_BINARY to exercise the actual Go MCP server.');
+test('real Go server artifacts preserve D2 themes across layouts, PNG, ASCII and errors', async ({
+  page,
+  viewer,
+  harnessServer,
+}, testInfo) => {
+  if (process.env.CI)
+    expect(harnessServer.realServer, 'CI must set D2_MCP_TEST_BINARY to a built Go server.').toBe(
+      true,
+    );
+  test.skip(
+    !harnessServer.realServer,
+    'Set D2_MCP_TEST_BINARY to exercise the actual Go MCP server.',
+  );
   test.setTimeout(120_000);
   expect(harnessServer.resource.mimeType).toBe('text/html;profile=mcp-app');
   expect(harnessServer.resource._meta.ui.permissions).toEqual({ clipboardWrite: {} });
   const frame = await viewer();
-  const source = 'direction: right\nusers: Users\napi: API\ndb: Database { shape: cylinder }\nusers -> api: request\napi -> db: query';
+  const source =
+    'direction: right\nusers: Users\napi: API\ndb: Database { shape: cylinder }\nusers -> api: request\napi -> db: query';
   for (const layout of ['dagre', 'elk', 'tala']) {
-    const result = await page.evaluate((args) => window.harness.render(args), { code: source, layout, format: 'svg', sketch: false, theme_id: 0 });
+    const result = await page.evaluate((args) => window.harness.render(args), {
+      code: source,
+      layout,
+      format: 'svg',
+      sketch: false,
+      theme_id: 0,
+    });
     await expect(frame.locator('#status')).toContainText('Preview ready', { timeout: 30_000 });
     await expect(frame.locator('#diagram')).toBeVisible();
-    expect(await frame.locator('#diagram').evaluate((image) => image.naturalWidth)).toBeGreaterThan(10);
+    expect(await frame.locator('#diagram').evaluate((image) => image.naturalWidth)).toBeGreaterThan(
+      10,
+    );
     const original = result.content.find((c) => c.type === 'resource').resource.text;
     // Parsing changes root sizing only; all D2 shapes, text, styles and colors survive.
-    expect(await frame.locator('#diagram').evaluate((image, original) => {
-      const parse = (s) => new DOMParser().parseFromString(s, 'image/svg+xml').documentElement.innerHTML;
-      return parse(atob(image.src.split(',')[1])) === parse(original);
-    }, original)).toBe(true);
+    expect(
+      await frame.locator('#diagram').evaluate((image, original) => {
+        const parse = (s) =>
+          new DOMParser().parseFromString(s, 'image/svg+xml').documentElement.innerHTML;
+
+        return parse(atob(image.src.split(',')[1])) === parse(original);
+      }, original),
+    ).toBe(true);
     await frame.locator('#download-image').click();
     await expect(frame.locator('#status')).toContainText('Download handed to the host');
   }
   await frame.locator('body').screenshot({ path: testInfo.outputPath('mcp-app-preview.png') });
-  const pngResult = await page.evaluate((args) => window.harness.render(args), { code: source, format: 'png', theme_id: 6 });
+  const pngResult = await page.evaluate((args) => window.harness.render(args), {
+    code: source,
+    format: 'png',
+    theme_id: 6,
+  });
   await expect(frame.locator('#status')).toContainText('Preview ready', { timeout: 30_000 });
   const pngURL = `data:image/png;base64,${pngResult.content.find((c) => c.type === 'image').data}`;
   await expect(frame.locator('#diagram')).toHaveAttribute('src', pngURL);
-  await page.evaluate(() => window.harness.raw({ jsonrpc: '2.0', method: 'ui/notifications/host-context-changed', params: { theme: 'dark' } }));
+  await page.evaluate(() =>
+    window.harness.raw({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/host-context-changed',
+      params: { theme: 'dark' },
+    }),
+  );
   await expect(frame.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(frame.locator('#diagram')).toHaveAttribute('src', pngURL);
-  expect(await frame.locator('#diagram').evaluate((image) => getComputedStyle(image).filter)).toBe('none');
+  expect(await frame.locator('#diagram').evaluate((image) => getComputedStyle(image).filter)).toBe(
+    'none',
+  );
   await frame.locator('#download-image').click();
   await expect(frame.locator('#status')).toContainText('Download handed to the host');
   await page.evaluate((args) => window.harness.render(args), { code: 'a -> b', format: 'ascii' });

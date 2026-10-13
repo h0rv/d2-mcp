@@ -32,6 +32,7 @@ type noImports struct{}
 func (noImports) Open(string) (fs.File, error) {
 	return nil, errors.New("stored documents must be self-contained; imports are disabled")
 }
+
 func (a *application) sourceWithDocument(ctx context.Context, args sourceInput) (d2.Source, error) {
 	if err := ctx.Err(); err != nil {
 		return d2.Source{}, err
@@ -60,12 +61,14 @@ func (a *application) sourceWithDocument(ctx context.Context, args sourceInput) 
 	}
 	return d2.Source{Code: doc.Code, Path: "input.d2", FS: noImports{}}, nil
 }
+
 func (a *application) addStoreTool(s *mcp.Server) {
 	closed, destructive := false, true
 	s.AddTool(&mcp.Tool{Name: "store-d2", Description: "Opt-in: store a complete self-contained D2 source using atomic revision checks. Empty expected_revision creates only; retain the returned ID and revision explicitly.",
 		InputSchema: storeInputSchema(), Annotations: &mcp.ToolAnnotations{OpenWorldHint: &closed, DestructiveHint: &destructive},
 	}, a.StoreD2Handler)
 }
+
 func (a *application) StoreD2Handler(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args struct {
 		ID       string  `json:"document_id"`
