@@ -59,6 +59,7 @@ func exerciseClient(t *testing.T, transport mcp.Transport, version string) {
 		}
 	}
 }
+
 func TestStreamableHTTP(t *testing.T) {
 	for _, version := range []string{"2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"} {
 		t.Run(version, func(t *testing.T) {
@@ -69,12 +70,14 @@ func TestStreamableHTTP(t *testing.T) {
 		})
 	}
 }
+
 func TestLegacySSE(t *testing.T) {
 	a := testApp(t, nil)
 	server := httptest.NewServer(httpHandler(a.server(), "sse"))
 	defer server.Close()
 	exerciseClient(t, &mcp.SSEClientTransport{Endpoint: server.URL + "/sse"}, "2024-11-05")
 }
+
 func TestStdioHelper(t *testing.T) {
 	if os.Getenv("D2_MCP_TEST_STDIO") != "1" {
 		return
@@ -86,11 +89,13 @@ func TestStdioHelper(t *testing.T) {
 	}
 	os.Exit(0)
 }
+
 func TestStdioProcess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestStdioHelper$")
 	cmd.Env = append(os.Environ(), "D2_MCP_TEST_STDIO=1")
 	exerciseClient(t, &mcp.CommandTransport{Command: cmd}, "2025-11-25")
 }
+
 func TestHTTPStatelessAndBoundaries(t *testing.T) {
 	a := testApp(t, nil)
 	b := testApp(t, nil)

@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	d2log "github.com/d2lang/d2/lib/log"
-
 	"github.com/d2lang/d2/d2compiler"
 	"github.com/d2lang/d2/d2graph"
 	"github.com/d2lang/d2/d2layouts/d2dagrelayout"
@@ -29,6 +27,7 @@ import (
 	"github.com/d2lang/d2/d2renderers/d2svg"
 	"github.com/d2lang/d2/d2target"
 	"github.com/d2lang/d2/d2themes/d2themescatalog"
+	d2log "github.com/d2lang/d2/lib/log"
 	"github.com/d2lang/d2/lib/textmeasure"
 )
 
@@ -51,7 +50,8 @@ type Options struct {
 
 type Error struct{ Code, Message string }
 
-func (e *Error) Error() string           { return e.Message }
+func (e *Error) Error() string { return e.Message }
+
 func failure(code, message string) error { return &Error{code, message} }
 
 type Source struct {
@@ -60,6 +60,7 @@ type Source struct {
 	Assets       fs.FS
 	InlineAssets bool
 }
+
 type Prepared struct {
 	Diagram *d2target.Diagram
 	Options *d2svg.RenderOpts

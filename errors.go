@@ -16,6 +16,7 @@ type diagnostic struct {
 	Column  int    `json:"column"`
 	Message string `json:"message"`
 }
+
 type toolError struct {
 	Code        string       `json:"code"`
 	Message     string       `json:"message"`

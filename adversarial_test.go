@@ -136,6 +136,7 @@ func (s cancellationStore) Get(ctx context.Context, _ string) (document.Document
 	close(s.cancelled)
 	return document.Document{}, ctx.Err()
 }
+
 func (s cancellationStore) Put(context.Context, string, string, string) (document.Document, error) {
 	return document.Document{}, document.ErrConflict
 }

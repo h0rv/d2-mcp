@@ -74,7 +74,9 @@ type sourceFile struct {
 func memoryFile(name string, data []byte) *sourceFile {
 	return &sourceFile{bytes.NewReader(data), name, int64(len(data))}
 }
-func (f *sourceFile) Close() error               { return nil }
+
+func (f *sourceFile) Close() error { return nil }
+
 func (f *sourceFile) Stat() (fs.FileInfo, error) { return sourceInfo{f.name, f.size}, nil }
 
 type sourceInfo struct {
@@ -82,12 +84,17 @@ type sourceInfo struct {
 	size int64
 }
 
-func (i sourceInfo) Name() string       { return path.Base(i.name) }
-func (i sourceInfo) Size() int64        { return i.size }
-func (i sourceInfo) Mode() fs.FileMode  { return 0444 }
+func (i sourceInfo) Name() string { return path.Base(i.name) }
+
+func (i sourceInfo) Size() int64 { return i.size }
+
+func (i sourceInfo) Mode() fs.FileMode { return 0444 }
+
 func (i sourceInfo) ModTime() time.Time { return time.Time{} }
-func (i sourceInfo) IsDir() bool        { return false }
-func (i sourceInfo) Sys() any           { return nil }
+
+func (i sourceInfo) IsDir() bool { return false }
+
+func (i sourceInfo) Sys() any { return nil }
 
 func (a *application) source(args sourceInput) (d2.Source, error) {
 	if (args.code == nil) == (args.filePath == nil) {

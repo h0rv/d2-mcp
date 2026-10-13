@@ -31,6 +31,7 @@ func (s *testStore) Get(ctx context.Context, id string) (document.Document, erro
 	}
 	return d, nil
 }
+
 func (s *testStore) Put(ctx context.Context, id, expected, code string) (document.Document, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -46,6 +47,7 @@ func (s *testStore) Put(ctx context.Context, id, expected, code string) (documen
 	s.docs[id] = d
 	return d, nil
 }
+
 func storeCall(t *testing.T, a *application, id, expected, code string) *mcp.CallToolResult {
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{"document_id": id, "expected_revision": expected, "code": code})
@@ -58,6 +60,7 @@ func storeCall(t *testing.T, a *application, id, expected, code string) *mcp.Cal
 	}
 	return r
 }
+
 func TestOptionalStoreAcrossInstances(t *testing.T) {
 	shared := &testStore{docs: make(map[string]document.Document)}
 	a := testApp(t, func(c *config) { c.Store = shared })
@@ -81,6 +84,7 @@ func TestOptionalStoreAcrossInstances(t *testing.T) {
 	requireOK(t, call(t, testApp(t, nil), false, map[string]any{"code": "a -> c"}))
 	requireError(t, storeCall(t, a, "import", "", "...@local.d2"), "invalid_d2")
 }
+
 func TestStoreConcurrentRevision(t *testing.T) {
 	shared := &testStore{docs: make(map[string]document.Document)}
 	a := testApp(t, func(c *config) { c.Store = shared })

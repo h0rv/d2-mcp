@@ -35,6 +35,7 @@ type compileAdmission struct {
 	vars                                               map[string]int
 	uses                                               []scalarUse
 }
+
 type scalarUse struct {
 	name string
 	glob bool
@@ -80,6 +81,7 @@ func admissionError(n d2ast.Node, code, message string) error {
 	r := n.GetRange()
 	return failure(code, fmt.Sprintf("%s:%d:%d: %s", r.Path, r.Start.Line+1, r.Start.Column+1, message))
 }
+
 func (p *compileAdmission) file(name string, prefix []string, depth, imports int) error {
 	if err := p.ctx.Err(); err != nil {
 		return err
@@ -142,6 +144,7 @@ func (p *compileAdmission) file(name string, prefix []string, depth, imports int
 	defer delete(p.active, name)
 	return p.walk(ast, name, prefix, depth, imports, false)
 }
+
 func indexOf(parts []string, name string) int {
 	for i, s := range parts {
 		if strings.EqualFold(s, name) {
@@ -150,6 +153,7 @@ func indexOf(parts []string, name string) int {
 	}
 	return -1
 }
+
 func keyParts(k *d2ast.KeyPath) []string {
 	if k == nil {
 		return nil
@@ -175,6 +179,7 @@ func foldIdentifier(s string) string {
 		return unicode.ToLower(smallest)
 	}, s)
 }
+
 func concat(a, b []string) []string {
 	r := make([]string, 0, len(a)+len(b))
 	r = append(r, a...)
@@ -359,6 +364,7 @@ func attributePath(parts []string, allowClass bool) bool {
 		return ok && len(parts) == 1
 	}
 }
+
 func attributeTree(n d2ast.Node, prefix []string, allowClass bool) bool {
 	if !attributePath(prefix, allowClass) {
 		return false
@@ -417,6 +423,7 @@ func attributeTree(n d2ast.Node, prefix []string, allowClass bool) bool {
 		return false
 	}
 }
+
 func subtreeCost(n d2ast.Node) (int, int) {
 	nodes, size := 0, 0
 	d2ast.Walk(n, func(n d2ast.Node) bool {
@@ -612,7 +619,8 @@ type admittedFile struct {
 	size int64
 }
 
-func (f *admittedFile) Close() error               { return nil }
+func (f *admittedFile) Close() error { return nil }
+
 func (f *admittedFile) Stat() (fs.FileInfo, error) { return admittedInfo{f.name, f.size}, nil }
 
 type admittedInfo struct {
@@ -620,9 +628,14 @@ type admittedInfo struct {
 	size int64
 }
 
-func (i admittedInfo) Name() string       { return path.Base(i.name) }
-func (i admittedInfo) Size() int64        { return i.size }
-func (i admittedInfo) Mode() fs.FileMode  { return 0444 }
+func (i admittedInfo) Name() string { return path.Base(i.name) }
+
+func (i admittedInfo) Size() int64 { return i.size }
+
+func (i admittedInfo) Mode() fs.FileMode { return 0444 }
+
 func (i admittedInfo) ModTime() time.Time { return time.Time{} }
-func (i admittedInfo) IsDir() bool        { return false }
-func (i admittedInfo) Sys() any           { return nil }
+
+func (i admittedInfo) IsDir() bool { return false }
+
+func (i admittedInfo) Sys() any { return nil }

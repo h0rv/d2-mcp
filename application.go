@@ -19,6 +19,7 @@ type config struct {
 	Timeout                                          time.Duration
 	Store                                            document.Store
 }
+
 type application struct {
 	config                config
 	input, output, assets *os.Root
@@ -69,6 +70,7 @@ func newApplication(c config) (*application, error) {
 	}
 	return a, nil
 }
+
 func (a *application) Close() {
 	if a.input != nil {
 		a.input.Close()
