@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+    <meta name="description" content="Give your agent D2 diagrams. Validate source and render SVG, PNG, or ASCII over MCP, remotely or on your own machine.">
+    <title>d2-mcp — diagrams for your agent</title>
+    <link rel="icon" href="data:,">
+    <style>
+      :root { color-scheme: light dark; --paper: #fafafa; --ink: #222; --quiet: #626262; --rule: #d6d6d6; --well: #f0f0f0; font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--paper); color: var(--ink); font-size: 14px; line-height: 1.7; }
+      main, footer { width: min(640px, calc(100% - 40px)); margin-inline: auto; }
+      main { padding-block: 48px 32px; }
+      h1, h2, h3 { line-height: 1.25; font-weight: 600; }
+      h1 { margin: 0 0 16px; font-size: 42px; letter-spacing: -2px; }
+      h2 { margin: 0 0 12px; font-size: 17px; }
+      h3 { margin: 20px 0 8px; font-size: 13px; }
+      p { margin: 12px 0; }
+      a { color: inherit; text-underline-offset: 4px; }
+      a:hover { text-decoration-thickness: 2px; }
+      nav, .downloads { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+      nav { margin-top: 20px; }
+      section { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--rule); }
+      .quiet, figcaption { color: var(--quiet); font-size: 12px; }
+      .command { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; margin: 0 0 8px; padding: 12px; background: var(--well); border: 1px solid var(--rule); }
+      pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; }
+      code { font-family: inherit; }
+      button { font: inherit; font-size: 12px; color: var(--quiet); background: transparent; border: 0; padding: 2px 4px; min-height: 26px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+      button:hover { color: var(--ink); }
+      button[hidden] { display: none; }
+      :focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+      figure { margin: 12px 0 0; }
+      .diagram { display: block; width: 100%; height: 240px; object-fit: contain; border: 1px solid var(--rule); background: white; }
+      figcaption { margin-top: 8px; }
+      footer { border-top: 1px solid var(--rule); padding-block: 16px 32px; color: var(--quiet); font-size: 12px; }
+      footer nav { margin-top: 8px; }
+      .skip { position: absolute; top: -100px; left: 20px; padding: 8px; background: var(--paper); }
+      .skip:focus { top: 4px; }
+      [role="status"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      @media (max-width: 480px) { main { padding-top: 32px; } h1 { font-size: 36px; } .diagram { height: 180px; } }
+      @media (prefers-color-scheme: dark) { :root { --paper: #191919; --ink: #eee; --quiet: #aaa; --rule: #444; --well: #242424; } }
+    </style>
+    <script src="/copy.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <main id="main">
+      <h1>d2-mcp</h1>
+      <p>Diagrams for your agent. Send <a href="https://d2lang.com/">D2</a> source;
+        get back SVG, PNG, or ASCII. Validate, render, and revise in your conversation.</p>
+      <p class="quiet">D2 0.9.0 · Dagre, ELK &amp; TALA · No saved documents or sessions</p>
+      <nav aria-label="Get started">
+        <a href="#connect">Connect your agent</a>
+        <a href="#local">Use it locally</a>
+        <a href="https://github.com/h0rv/d2-mcp">GitHub ↗</a>
+      </nav>
+
+      <section aria-labelledby="example-title">
+        <h2 id="example-title">A little source, a diagram.</h2>
+        <div class="command">
+          <pre><code id="example-source" tabindex="0">direction: right
+idea -&gt; diagram</code></pre>
+          <button hidden data-copy="example-source" aria-label="Copy D2 example">Copy</button>
+        </div>
+        <figure>
+          <img class="diagram" src="/example.svg" alt="A box labeled idea connects to a box labeled diagram." width="640" height="240">
+          <figcaption>Rendered with D2’s defaults: Dagre layout, neutral theme, no sketch.</figcaption>
+        </figure>
+      </section>
+
+      <section id="connect" aria-labelledby="connect-title">
+        <h2 id="connect-title">Connect your agent</h2>
+        <p>Use the public Streamable HTTP endpoint. No install or token needed.</p>
+        <div class="command">
+          <pre><code id="remote-url" tabindex="0">https://d2.horv.co/mcp</code></pre>
+          <button hidden data-copy="remote-url" aria-label="Copy MCP URL">Copy</button>
+        </div>
+        <h3>Claude Code</h3>
+        <div class="command">
+          <pre><code id="claude-command" tabindex="0">claude mcp add --scope user --transport http d2 https://d2.horv.co/mcp</code></pre>
+          <button hidden data-copy="claude-command" aria-label="Copy Claude Code setup">Copy</button>
+        </div>
+        <h3>Codex</h3>
+        <div class="command">
+          <pre><code id="codex-command" tabindex="0">codex mcp add d2 --url https://d2.horv.co/mcp</code></pre>
+          <button hidden data-copy="codex-command" aria-label="Copy Codex setup">Copy</button>
+        </div>
+        <h3>Pi</h3>
+        <div class="command">
+          <pre><code id="pi-command" tabindex="0">pi mcp add d2 --exposure direct --url https://d2.horv.co/mcp</code></pre>
+          <button hidden data-copy="pi-command" aria-label="Copy Pi setup">Copy</button>
+        </div>
+        <p>Then ask: “Draw a diagram of a client talking to an API and a database.”</p>
+        <p class="quiet">Send complete source on each call. The hosted service has no file access
+          or saved diagram library. Public use shares a request allowance.
+          <a href="https://github.com/h0rv/d2-mcp/blob/main/docs/agent-installation.md">More client setup</a>.</p>
+      </section>
+
+      <section id="local" aria-labelledby="local-title">
+        <h2 id="local-title">Use it locally</h2>
+        <p>Install the current source with Go 1.27.2+:</p>
+        <div class="command">
+          <pre><code id="install-command" tabindex="0">go install github.com/h0rv/d2-mcp@main
+d2-mcp --version</code></pre>
+          <button hidden data-copy="install-command" aria-label="Copy Go installation">Copy</button>
+        </div>
+        <p class="quiet">Put Go’s bin directory on your PATH. PNG rendering is built in;
+          no browser or separate D2 executable is needed.</p>
+        <p>Connect the local server, for example with Claude Code:</p>
+        <div class="command">
+          <pre><code id="local-command" tabindex="0">claude mcp add --scope user --transport stdio d2 -- d2-mcp --transport stdio</code></pre>
+          <button hidden data-copy="local-command" aria-label="Copy local Claude Code setup">Copy</button>
+        </div>
+        <p class="quiet">Choose local or remote setup to avoid registering <code>d2</code> twice.</p>
+        <h3>Prefer a prebuilt binary?</h3>
+        <p>Release 1.2.0 is available below. It uses the older renderer without TALA;
+          use SVG, since PNG in that release needs <code>rsvg-convert</code>.</p>
+        <nav class="downloads" aria-label="Download version 1.2.0">
+          <a href="https://github.com/h0rv/d2-mcp/releases/download/1.2.0/d2-mcp-darwin-arm64">macOS Apple silicon</a>
+          <a href="https://github.com/h0rv/d2-mcp/releases/download/1.2.0/d2-mcp-darwin-amd64">macOS Intel</a>
+          <a href="https://github.com/h0rv/d2-mcp/releases/download/1.2.0/d2-mcp-linux-amd64">Linux x64</a>
+          <a href="https://github.com/h0rv/d2-mcp/releases/download/1.2.0/d2-mcp-linux-arm64">Linux ARM64</a>
+          <a href="https://github.com/h0rv/d2-mcp/releases/download/1.2.0/d2-mcp-windows-amd64.exe">Windows x64</a>
+        </nav>
+        <p class="quiet">Follow the <a href="https://github.com/h0rv/d2-mcp/blob/main/docs/installation.md#published-binary--no-source-or-compiler">checksum and install instructions</a>
+          before running a download. Linux x64 requires glibc 2.34+.
+          <a href="https://github.com/h0rv/d2-mcp/blob/main/docs/agent-installation.md">Local client and plugin setup</a>.</p>
+      </section>
+    </main>
+    <footer>
+      <p>Diagrams powered by <a href="https://d2lang.com/">D2</a>, from
+        <a href="https://terrastruct.com/">Terrastruct</a>. d2-mcp is an independent MCP server.</p>
+      <nav aria-label="Project links">
+        <a href="https://github.com/h0rv/d2-mcp">Source</a>
+        <a href="https://github.com/h0rv/d2-mcp/blob/main/LICENSE">Code: MIT</a>
+        <a href="https://github.com/h0rv/d2-mcp/issues">Issues</a>
+      </nav>
+    </footer>
+    <p role="status" aria-live="polite"></p>
+  </body>
+</html>
