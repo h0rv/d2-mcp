@@ -16,13 +16,22 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_sqlite_classes": [
-        "Renderer"
-      ]
+      "new_sqlite_classes": ["Renderer"]
     }
   ],
   "compatibility_flags": [
     "enable_request_signal",
     "request_signal_passthrough"
+  ],
+  "keep_vars": true,
+  "ratelimits": [
+    {
+      "name": "PUBLIC_REQUESTS",
+      "namespace_id": "20261015",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
+    }
   ]
 }

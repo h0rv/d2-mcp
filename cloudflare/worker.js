@@ -72,14 +72,39 @@ export class Renderer {
 export default {
   async fetch(request, env) {
     if (new URL(request.url).pathname !== '/mcp') return new Response('Not found', { status: 404 });
-    if (!env.D2_MCP_TOKEN)
-      return new Response('Configure D2_MCP_TOKEN before use', { status: 503 });
 
-    const encoder = new TextEncoder();
-    const supplied = encoder.encode(request.headers.get('Authorization') ?? '');
-    const expected = encoder.encode(`Bearer ${env.D2_MCP_TOKEN}`);
-    if (supplied.length !== expected.length || !crypto.subtle.timingSafeEqual(supplied, expected))
-      return new Response('Unauthorized', { status: 401 });
+    const publicMode = env.D2_MCP_PUBLIC === 'true';
+    if (
+      (env.D2_MCP_PUBLIC !== undefined && !['true', 'false'].includes(env.D2_MCP_PUBLIC)) ||
+      (publicMode && env.D2_MCP_TOKEN)
+    )
+      return new Response('Configure either public access or a private bearer token', {
+        status: 503,
+      });
+
+    if (publicMode) {
+      try {
+        const { success } = await env.PUBLIC_REQUESTS.limit({ key: 'd2-mcp:public:/mcp' });
+        if (!success)
+          return new Response('Public request limit reached; retry later', {
+            status: 429,
+            headers: { 'Retry-After': '60' },
+          });
+      } catch {
+        return new Response('Public request limiter unavailable', { status: 503 });
+      }
+    } else {
+      if (!env.D2_MCP_TOKEN)
+        return new Response('Configure D2_MCP_TOKEN or explicitly set D2_MCP_PUBLIC=true', {
+          status: 503,
+        });
+
+      const encoder = new TextEncoder();
+      const supplied = encoder.encode(request.headers.get('Authorization') ?? '');
+      const expected = encoder.encode(`Bearer ${env.D2_MCP_TOKEN}`);
+      if (supplied.length !== expected.length || !crypto.subtle.timingSafeEqual(supplied, expected))
+        return new Response('Unauthorized', { status: 401 });
+    }
 
     return env.RENDERER.getByName('renderer').fetch(request);
   },

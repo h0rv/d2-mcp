@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
@@ -43,10 +44,16 @@ test('generic Go Wasm bridge runs without a Cloudflare host', async () => {
   );
 });
 
-const options = (token) =>
+const config = JSON.parse(readFileSync(new URL('./wrangler.jsonc', import.meta.url), 'utf8'));
+const ratelimits = Object.fromEntries(
+  config.ratelimits.map(({ name, ...settings }) => [name, settings]),
+);
+
+const options = (bindings = {}, limits = ratelimits, entry) =>
   convertV4MiniflareOptions({
     name: 'd2-mcp-test',
     modules: [
+      ...(entry ? [entry] : []),
       { type: 'ESModule', path: 'worker.js' },
       { type: 'ESModule', path: 'build/wasm_exec.js' },
       { type: 'CompiledWasm', path: 'build/d2.wasm' },
@@ -54,129 +61,248 @@ const options = (token) =>
     compatibilityDate: '2026-10-12',
     compatibilityFlags: ['enable_request_signal', 'request_signal_passthrough'],
     durableObjects: { RENDERER: { className: 'Renderer', useSQLite: true } },
-    bindings: token ? { D2_MCP_TOKEN: token } : {},
+    bindings,
+    ratelimits: limits,
   });
 
 const token = 'local-test-fixture';
 const headers = {
-  Authorization: `Bearer ${token}`,
   'Content-Type': 'application/json',
   Accept: 'application/json, text/event-stream',
   'MCP-Protocol-Version': '2025-11-25',
 };
 
-test('authenticated Go MCP: discovery, layouts, formats, errors and bounds', async () => {
-  const mf = new Miniflare(options(token));
-  let id = 0;
+for (const publicMode of [false, true]) {
+  test(`${publicMode ? 'public' : 'private'} Go MCP: discovery, layouts, formats, errors and bounds`, async () => {
+    const mf = new Miniflare(
+      options(publicMode ? { D2_MCP_PUBLIC: 'true' } : { D2_MCP_TOKEN: token }),
+    );
+    const requestHeaders = publicMode ? headers : { ...headers, Authorization: `Bearer ${token}` };
+    let id = 0;
 
-  async function rpc(method, params, version = '2025-11-25') {
-    const current = version === '2026-07-28';
-    if (current)
-      params = {
-        ...params,
-        _meta: {
-          'io.modelcontextprotocol/protocolVersion': version,
-          'io.modelcontextprotocol/clientCapabilities': {},
+    async function rpc(method, params, version = '2025-11-25') {
+      const current = version === '2026-07-28';
+      if (current)
+        params = {
+          ...params,
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': version,
+            'io.modelcontextprotocol/clientCapabilities': {},
+          },
+        };
+      const response = await mf.dispatchFetch('https://d2.test/mcp', {
+        method: 'POST',
+        headers: {
+          ...requestHeaders,
+          'MCP-Protocol-Version': version,
+          'Mcp-Method': method,
+          ...(params?.name ? { 'Mcp-Name': params.name } : {}),
         },
-      };
-    const response = await mf.dispatchFetch('https://d2.test/mcp', {
-      method: 'POST',
-      headers: {
-        ...headers,
-        'MCP-Protocol-Version': version,
-        'Mcp-Method': method,
-        ...(params?.name ? { 'Mcp-Name': params.name } : {}),
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }),
-    });
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get('mcp-session-id'), null);
-    const message = await response.json();
-    assert.equal(message.error, undefined, JSON.stringify(message));
-    return message.result;
-  }
-
-  try {
-    assert.equal((await mf.dispatchFetch('https://d2.test/mcp')).status, 401);
-    assert.equal((await mf.dispatchFetch('https://d2.test/other', { headers })).status, 404);
-    assert.equal((await mf.dispatchFetch('https://d2.test/mcp', { headers })).status, 405);
-    const init = await rpc('initialize', {
-      protocolVersion: '2025-11-25',
-      capabilities: {},
-      clientInfo: { name: 'integration-test', version: '1' },
-    });
-    assert.equal(init.serverInfo.name, 'd2-mcp');
-    const list = await rpc('tools/list', {}, '2026-07-28');
-    assert.equal(list.tools.length, 3);
-    for (const [layout, format] of [
-      ['dagre', 'svg'],
-      ['elk', 'png'],
-      ['tala', 'ascii'],
-    ]) {
-      const result = await rpc('tools/call', {
-        name: 'render-d2',
-        arguments: { code: 'client -> api -> database', layout, format },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }),
       });
-      assert.equal(result.isError, undefined, JSON.stringify(result));
-      assert.equal(result.structuredContent.options.layout, layout);
-      assert.ok(result.structuredContent.artifact.bytes > 20);
-      if (format === 'png')
-        assert.equal(
-          Buffer.from(result.content.find((c) => c.type === 'image').data, 'base64')
-            .subarray(0, 8)
-            .toString('hex'),
-          '89504e470d0a1a0a',
-        );
-      if (format === 'svg')
-        assert.match(result.content.find((c) => c.type === 'resource').resource.text, /<svg/);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('mcp-session-id'), null);
+      const message = await response.json();
+      assert.equal(message.error, undefined, JSON.stringify(message));
+      return message.result;
     }
-    for (const args of [
-      { code: 'a: {' },
-      { file_path: 'secret.d2' },
-      { code: 'a.icon: https://example.com/image.png' },
-    ]) {
-      const result = await rpc('tools/call', { name: 'render-d2', arguments: args });
-      assert.equal(result.isError, true);
+
+    try {
+      assert.equal((await mf.dispatchFetch('https://d2.test/mcp')).status, publicMode ? 405 : 401);
+      assert.equal(
+        (await mf.dispatchFetch('https://d2.test/other', { headers: requestHeaders })).status,
+        404,
+      );
+      assert.equal(
+        (await mf.dispatchFetch('https://d2.test/mcp', { headers: requestHeaders })).status,
+        405,
+      );
+      const init = await rpc('initialize', {
+        protocolVersion: '2025-11-25',
+        capabilities: {},
+        clientInfo: { name: 'integration-test', version: '1' },
+      });
+      assert.equal(init.serverInfo.name, 'd2-mcp');
+      const list = await rpc('tools/list', {}, '2026-07-28');
+      assert.equal(list.tools.length, 3);
+      for (const [layout, format] of [
+        ['dagre', 'svg'],
+        ['elk', 'png'],
+        ['tala', 'ascii'],
+      ]) {
+        const result = await rpc('tools/call', {
+          name: 'render-d2',
+          arguments: { code: 'client -> api -> database', layout, format },
+        });
+        assert.equal(result.isError, undefined, JSON.stringify(result));
+        assert.equal(result.structuredContent.options.layout, layout);
+        assert.ok(result.structuredContent.artifact.bytes > 20);
+        if (format === 'png')
+          assert.equal(
+            Buffer.from(result.content.find((c) => c.type === 'image').data, 'base64')
+              .subarray(0, 8)
+              .toString('hex'),
+            '89504e470d0a1a0a',
+          );
+        if (format === 'svg')
+          assert.match(result.content.find((c) => c.type === 'resource').resource.text, /<svg/);
+      }
+      for (const args of [
+        { code: 'a: {' },
+        { file_path: 'secret.d2' },
+        { code: 'a.icon: https://example.com/image.png' },
+      ]) {
+        const result = await rpc('tools/call', { name: 'render-d2', arguments: args });
+        assert.equal(result.isError, true);
+      }
+      assert.equal(
+        (
+          await mf.dispatchFetch('https://d2.test/mcp', {
+            method: 'POST',
+            headers: requestHeaders,
+            body: '[]',
+          })
+        ).status,
+        400,
+      );
+      assert.equal(
+        (
+          await mf.dispatchFetch('https://d2.test/mcp', {
+            method: 'POST',
+            headers: requestHeaders,
+            body: ' '.repeat(2 * 1024 * 1024 + 1),
+          })
+        ).status,
+        413,
+      );
+      assert.equal(
+        (
+          await mf.dispatchFetch('https://d2.test/mcp', {
+            method: 'POST',
+            headers: { ...requestHeaders, Origin: 'https://other.test' },
+            body: '{}',
+          })
+        ).status,
+        403,
+      );
+      assert.equal(
+        (
+          await rpc(
+            'tools/call',
+            { name: 'compile-d2', arguments: { code: 'a -> b' } },
+            '2026-07-28',
+          )
+        ).structuredContent.valid,
+        true,
+      );
+    } finally {
+      await mf.dispose();
     }
-    assert.equal(
-      (await mf.dispatchFetch('https://d2.test/mcp', { method: 'POST', headers, body: '[]' }))
-        .status,
-      400,
-    );
-    assert.equal(
-      (
-        await mf.dispatchFetch('https://d2.test/mcp', {
-          method: 'POST',
-          headers,
-          body: ' '.repeat(2 * 1024 * 1024 + 1),
-        })
-      ).status,
-      413,
-    );
-    assert.equal(
-      (
-        await mf.dispatchFetch('https://d2.test/mcp', {
-          method: 'POST',
-          headers: { ...headers, Origin: 'https://other.test' },
-          body: '{}',
-        })
-      ).status,
-      403,
-    );
-    assert.equal(
-      (await rpc('tools/call', { name: 'compile-d2', arguments: { code: 'a -> b' } }, '2026-07-28'))
-        .structuredContent.valid,
-      true,
-    );
+  });
+}
+
+test('missing, invalid and conflicting access configuration fails closed', async () => {
+  for (const bindings of [
+    {},
+    { D2_MCP_PUBLIC: 'false' },
+    { D2_MCP_PUBLIC: '' },
+    { D2_MCP_PUBLIC: 'TRUE' },
+    { D2_MCP_PUBLIC: true },
+    { D2_MCP_PUBLIC: 'yes', D2_MCP_TOKEN: token },
+    { D2_MCP_PUBLIC: 'true', D2_MCP_TOKEN: token },
+  ]) {
+    const mf = new Miniflare(options(bindings));
+    try {
+      const response = await mf.dispatchFetch('https://d2.test/mcp', {
+        headers: { ...headers, Authorization: `Bearer ${token}` },
+      });
+      assert.equal(response.status, 503, JSON.stringify(bindings));
+    } finally {
+      await mf.dispose();
+    }
+  }
+});
+
+test('explicit private mode preserves bearer checks without a public limiter', async () => {
+  const mf = new Miniflare(options({ D2_MCP_PUBLIC: 'false', D2_MCP_TOKEN: token }, {}));
+  try {
+    for (const authorization of ['', 'Bearer wrong', `Bearer ${token.slice(1)}x`]) {
+      const response = await mf.dispatchFetch('https://d2.test/mcp', {
+        headers: { Authorization: authorization },
+      });
+      assert.equal(response.status, 401);
+    }
+    const response = await mf.dispatchFetch('https://d2.test/mcp', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 405); // Authenticated request reaches the stateless Go handler.
   } finally {
     await mf.dispose();
   }
 });
 
-test('missing credential fails closed', async () => {
-  const mf = new Miniflare(options());
+test('all public callers share the configured native request allowance', async () => {
+  const mf = new Miniflare(options({ D2_MCP_PUBLIC: 'true' }));
   try {
-    assert.equal((await mf.dispatchFetch('https://d2.test/mcp', { headers })).status, 503);
+    assert.deepEqual(ratelimits.PUBLIC_REQUESTS.simple, { limit: 60, period: 60 });
+    assert.equal((await mf.dispatchFetch('https://d2.test/other')).status, 404);
+    let limited;
+    // The native limiter uses wall-clock windows; allow one boundary during the burst.
+    for (let i = 0; i <= 120; i++) {
+      const response = await mf.dispatchFetch(`https://d2.test/mcp?caller=${i}`, {
+        headers: { 'CF-Connecting-IP': `192.0.2.${i}`, Authorization: `Bearer caller-${i}` },
+      });
+      if (response.status === 429) {
+        limited = response;
+        break;
+      }
+      assert.equal(response.status, 405); // Invalid GET still consumes public allowance.
+    }
+    assert.ok(limited, 'the shared public allowance must reject the request burst');
+    assert.equal(limited.headers.get('Retry-After'), '60');
+  } finally {
+    await mf.dispose();
+  }
+});
+
+test('missing, failing or denying limiter never forwards to rendering', async () => {
+  const mf = new Miniflare(
+    options(
+      { D2_MCP_PUBLIC: 'true' },
+      {},
+      {
+        type: 'ESModule',
+        path: 'limiter-failure-test.js',
+        contents: `import worker from './worker.js';
+      export { Renderer } from './worker.js';
+      export default {
+        fetch(request, env) {
+          const bindings = { ...env,
+            RENDERER: { getByName() { throw new Error('renderer must not be reached'); } }
+          };
+          if (request.headers.has('X-Test-Throw'))
+            bindings.PUBLIC_REQUESTS = { limit() { throw new Error('unavailable'); } };
+          if (request.headers.has('X-Test-Deny'))
+            bindings.PUBLIC_REQUESTS = { limit() { return { success: false }; } };
+          return worker.fetch(request, bindings);
+        }
+      };`,
+      },
+    ),
+  );
+  try {
+    for (const requestHeaders of [{}, { 'X-Test-Throw': '1' }]) {
+      const response = await mf.dispatchFetch('https://d2.test/mcp', { headers: requestHeaders });
+      assert.equal(response.status, 503);
+      assert.equal(await response.text(), 'Public request limiter unavailable');
+    }
+    const limited = await mf.dispatchFetch('https://d2.test/mcp', {
+      method: 'POST',
+      headers: { ...headers, 'X-Test-Deny': '1' },
+      body: ' '.repeat(2 * 1024 * 1024 + 1),
+    });
+    assert.equal(limited.status, 429); // No renderer access or oversized-body processing.
+    assert.equal(limited.headers.get('Retry-After'), '60');
   } finally {
     await mf.dispose();
   }
