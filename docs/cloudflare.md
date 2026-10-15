@@ -116,3 +116,7 @@ do not call the renderer or the MCP limiter; other methods return 405. Unknown
 routes remain 404. The SVG was rendered from `example.d2` with `format: "svg"`
 and no rendering overrides. Browser checks reuse the existing `apps/` test
 dependencies; the page itself has no framework, dependencies or external assets.
+Client tabs support keyboard selection and fall back to visible setup commands
+without JavaScript. The page links to releases without offering an installer
+until binaries for the updated server are published; see the 1.2.0 stdio
+limitation in [installation](installation.md#published-binary--no-source-or-compiler).

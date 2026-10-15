@@ -31,6 +31,11 @@ Checksums verify the downloaded bytes, not signed provenance.
 `--image-type svg` unless `rsvg-convert` is installed for PNG. Its Linux amd64
 binary requires glibc 2.34. Windows ARM64 has no native release binary.
 
+The published Linux 1.2.0 binary also writes D2 diagnostic output to stdout
+during rendering, which breaks strict MCP stdio clients. The current source
+fixes this, but updated binaries are not published yet. Prefer the
+[hosted connection](agent-installation.md#remote-http) or current source.
+
 Verify in the download directory **before running or replacing anything**:
 
 ```sh

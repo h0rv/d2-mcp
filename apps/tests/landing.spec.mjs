@@ -59,17 +59,15 @@ for (const [name, viewport] of [
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('d2-mcp');
     await expect(page.locator('#example-source')).toHaveText(source);
     await expect(page.locator('#remote-url')).toHaveText('https://d2.horv.co/mcp');
-    await expect(page.locator('#install-command')).toContainText(
-      'go install github.com/h0rv/d2-mcp@main',
-    );
-    await expect(
-      page.getByRole('navigation', { name: 'Download version 1.2.0' }).getByRole('link'),
-    ).toHaveCount(5);
+    await expect(page.getByRole('tablist')).toHaveCount(1);
+    await expect(page.getByRole('tabpanel')).toHaveCount(1);
+    await expect(page.locator('main')).not.toContainText('A little source');
+    await expect(page.locator('main')).not.toContainText('go install');
     await expect(page.locator('.diagram')).toBeVisible();
     expect(
       await page.locator('.diagram').evaluate((image) => image.complete && image.naturalWidth > 0),
     ).toBe(true);
-    for (const button of await page.locator('button[data-copy]').all()) {
+    const copy = async (button) => {
       const expected = await page
         .locator(`#${await button.getAttribute('data-copy')}`)
         .textContent();
@@ -78,7 +76,22 @@ for (const [name, viewport] of [
       await expect(button).toHaveText('Copied');
       await expect(page.getByRole('status')).toContainText('copied.');
       expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
+    };
+    await copy(page.getByRole('button', { name: 'Copy D2 example', exact: true }));
+    for (const group of await page.locator('[data-tabs]').all()) {
+      for (const tab of await group.getByRole('tab').all()) {
+        await tab.click();
+        const panel = group.getByRole('tabpanel');
+        await expect(panel).toHaveCount(1);
+        await expect(panel).toHaveAttribute('aria-labelledby', await tab.getAttribute('id'));
+        await expect(tab).toHaveAttribute('aria-selected', 'true');
+        await copy(panel.getByRole('button', { name: /^Copy / }));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      }
+      await group.getByRole('tab').first().click();
     }
+    // Capture the initial state, without temporary copy feedback or focus rings.
+    await page.reload();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
@@ -107,6 +120,7 @@ test('landing clipboard denial selects the exact command for manual copying', as
       },
     }),
   );
+  await page.getByRole('tab', { name: 'Codex', exact: true }).click();
   await page.getByRole('button', { name: 'Copy Codex setup', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Clipboard unavailable');
   await expect(page.locator('#codex-command')).toBeFocused();
@@ -126,15 +140,49 @@ test('landing content and downloads remain usable without JavaScript', async ({ 
     await expect(page.locator('#claude-command')).toContainText('https://d2.horv.co/mcp');
     await expect(page.locator('button[data-copy]:visible')).toHaveCount(0);
     await expect(page.locator('.diagram')).toBeVisible();
-    await page.getByRole('link', { name: 'Use it locally', exact: true }).click();
+    await page.getByRole('link', { name: 'Downloads', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Use it locally', exact: true }),
+      page.getByRole('heading', { name: 'Local downloads', exact: true }),
     ).toBeInViewport();
-    await expect(page.getByRole('link', { name: 'Linux x64', exact: true })).toHaveAttribute(
+    await expect(page.getByRole('tablist')).toHaveCount(0);
+    await expect(page.getByRole('tabpanel')).toHaveCount(0);
+    await expect(page.locator('[data-panel]:visible')).toHaveCount(3);
+    await expect(page.getByRole('link', { name: 'Releases', exact: true })).toHaveAttribute(
       'href',
-      'https://github.com/h0rv/d2-mcp/releases/download/1.2.0/d2-mcp-linux-amd64',
+      'https://github.com/h0rv/d2-mcp/releases',
+    );
+    await expect(page.locator('#local')).toContainText(
+      'Binaries for the updated server aren’t published yet.',
     );
   } finally {
     await context.close();
   }
+});
+
+test('landing client tabs support keyboard selection and roving focus', async ({ page }) => {
+  await page.goto(origin);
+  const list = page.getByRole('tablist', { name: 'MCP client' });
+  const tabs = list.getByRole('tab');
+  const count = await tabs.count();
+  const check = async (index) => {
+    await expect(tabs.nth(index)).toBeFocused();
+    await expect(tabs.nth(index)).toHaveAttribute('aria-selected', 'true');
+    await expect(list.locator('[tabindex="0"]')).toHaveCount(1);
+    await expect(page.locator(`#${await tabs.nth(index).getAttribute('aria-controls')}`)).toBeVisible();
+  };
+  await tabs.first().focus();
+  await page.keyboard.press('ArrowLeft');
+  await check(count - 1);
+  await page.keyboard.press('ArrowRight');
+  await check(0);
+  await page.keyboard.press('End');
+  await check(count - 1);
+  await page.keyboard.press('Home');
+  await check(0);
+  await page.keyboard.press('ArrowRight');
+  await check(1);
+  await page.keyboard.press('Tab');
+  const panel = page.locator(`#${await tabs.nth(1).getAttribute('aria-controls')}`);
+  await expect(panel.locator('code')).toBeFocused();
+  await expect(page.locator('[data-tabs]').filter({ has: list }).locator('[data-panel][hidden] :focus')).toHaveCount(0);
 });
