@@ -45,7 +45,7 @@ Send exactly one JSON-RPC object per HTTP POST. Batches are rejected on every pr
 
 Legacy SSE remains available at `/sse` with `--transport sse` (or `--sse`). Its SDK-managed connections are stateful and need a stable server connection. Prefer HTTP for new integrations. `MCP_TRANSPORT`, `PORT`, and legacy `SSE_MODE`/`SSE_PORT` are still accepted; explicit transport/port flags take precedence, and `--sse` selects SSE.
 
-HTTP binds to loopback by default, rejects cross-origin browser requests, and retains the SDK's localhost/DNS-rebinding protection. There is no built-in authentication or multi-user authorization. If exposing it beyond a trusted local environment, supply authentication, TLS, request limits, and process resource limits in your deployment. No public hosting is configured by this repository.
+HTTP binds to loopback by default, rejects cross-origin browser requests, and retains the SDK's localhost/DNS-rebinding protection. There is no built-in authentication or multi-user authorization. If exposing it beyond a trusted local environment, supply authentication, TLS, request limits, and process resource limits in your deployment. The optional [Cloudflare deployment](docs/cloudflare.md) supports private bearer access or explicit token-free public access with the runtime setting `D2_MCP_PUBLIC=true` and a shared request limit.
 
 ### Optional diagram viewer
 
