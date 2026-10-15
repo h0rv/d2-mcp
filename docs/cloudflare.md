@@ -75,17 +75,22 @@ rate limiting does not prevent charges on Paid accounts.
 
 ### Endpoint and platform
 
-The configured Worker name is `d2-mcp`; its endpoint will be
-`https://d2-mcp.<ACCOUNT_SUBDOMAIN>.workers.dev/mcp`. Deployment creates that
-public HTTPS route and one SQLite-backed Durable Object namespace. No custom
-domain, storage backend, paid plan or billing enrollment is needed by the config.
+The canonical endpoint is `https://d2.horv.co/mcp`. Wrangler declares
+`d2.horv.co` as a custom domain for `d2-mcp`, so GitHub Builds deployments retain
+the route. The `workers_dev` setting remains enabled, preserving
+`https://d2-mcp.<ACCOUNT_SUBDOMAIN>.workers.dev/mcp` as an alternate endpoint.
+
+For your own deployment, replace or remove the custom-domain route in
+`cloudflare/wrangler.jsonc`; a custom domain requires a zone in your Cloudflare
+account. Deployment also creates one SQLite-backed Durable Object namespace.
+No storage backend, paid plan or billing enrollment is needed by the config.
 Confirm the actual account is Free: a Paid account has different billing rules.
 
 [Free Durable Object quotas](https://developers.cloudflare.com/durable-objects/platform/pricing/)
 fail requests after the daily allowance rather than adding Free-plan charges.
 Cloudflare still enforces its [runtime limits](https://developers.cloudflare.com/durable-objects/platform/limits/).
-Local tests, a standalone Node-hosted Go Wasm render, and the dry-run bundle check pass; live deployment/account admission
-remain unverified because the available Wrangler session is unauthenticated.
+Local tests cover a standalone Node-hosted Go Wasm render and the hosted MCP
+behavior; the dry-run bundle check validates the deployment configuration.
 
 The deployment accepts complete `code` and native render options. Local files,
 image assets, document storage and the optional UI are disabled. Cancellation

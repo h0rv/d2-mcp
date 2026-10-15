@@ -1,8 +1,9 @@
 # Connect your client
 
-[Install the binary](installation.md) first. Replace `d2-mcp` with its absolute
-path if your client does not inherit your shell's PATH. Choose one connection
-method to avoid registering the server twice.
+For hosted use, skip installation and use [Remote HTTP](#remote-http) below.
+For local use, [install the binary](installation.md) first and replace `d2-mcp`
+with its absolute path if your client does not inherit your shell's PATH.
+Choose one connection method to avoid registering the server twice.
 
 ## Claude Code
 
@@ -62,17 +63,21 @@ For VS Code, put it under `servers` in `.vscode/mcp.json` instead of
 
 ## Remote HTTP
 
-Set `D2_MCP_URL` to your deployed HTTPS endpoint, then choose your client:
+The public endpoint is `https://d2.horv.co/mcp`; it needs no Authorization header.
+Set `D2_MCP_URL`, then choose your client:
 
 ```sh
+export D2_MCP_URL=https://d2.horv.co/mcp
 claude mcp add --scope user --transport http d2 "$D2_MCP_URL"
 codex mcp add d2 --url "$D2_MCP_URL"
 pi mcp add d2 --exposure direct --url "$D2_MCP_URL"
 ```
 
-In PowerShell use `$env:D2_MCP_URL`. Configure authentication using the client's
-OAuth/header settings, never credentials in the URL. Send complete `code`;
-file paths refer to the server's machine. No hosted endpoint is supplied.
+In PowerShell set `$env:D2_MCP_URL = 'https://d2.horv.co/mcp'` and use
+`$env:D2_MCP_URL` in the client command. Send complete `code`; the hosted service
+has no file access. For your own deployment, substitute its HTTPS endpoint and
+configure any authentication using the client's OAuth/header settings, never
+credentials in the URL.
 
 For an absolute binary path or custom remote endpoint, use the direct client
 commands above. The optional static plugins use `d2-mcp` on PATH. All clients

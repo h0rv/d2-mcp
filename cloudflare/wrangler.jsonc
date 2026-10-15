@@ -4,6 +4,12 @@
   "compatibility_date": "2026-10-12",
   "send_metrics": false,
   "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "d2.horv.co",
+      "custom_domain": true
+    }
+  ],
   "preview_urls": false,
   "durable_objects": {
     "bindings": [

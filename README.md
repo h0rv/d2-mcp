@@ -8,6 +8,9 @@ This branch uses **D2 0.9.0**, **Go 1.27.2**, and the official **Go MCP SDK 1.8.
 
 Follow [install commands](docs/installation.md), then [connect Claude, Codex, Pi, or VS Code](docs/agent-installation.md). The refreshed renderer is not released yet; the guide distinguishes building this branch from installing the older published binary.
 
+For hosted use without installing a binary, connect to `https://d2.horv.co/mcp`
+using the [remote HTTP client commands](docs/agent-installation.md#remote-http).
+
 ## Clients and transports
 
 Stdio remains the default. For Claude Desktop or another client using `mcpServers`:
