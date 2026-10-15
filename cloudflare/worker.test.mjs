@@ -55,6 +55,9 @@ const options = (bindings = {}, limits = ratelimits, entry) =>
     modules: [
       ...(entry ? [entry] : []),
       { type: 'ESModule', path: 'worker.js' },
+      { type: 'Text', path: 'site/index.html' },
+      { type: 'Text', path: 'site/example.svg' },
+      { type: 'Text', path: 'site/copy.js' },
       { type: 'ESModule', path: 'build/wasm_exec.js' },
       { type: 'CompiledWasm', path: 'build/d2.wasm' },
     ],
@@ -71,6 +74,60 @@ const headers = {
   Accept: 'application/json, text/event-stream',
   'MCP-Protocol-Version': '2025-11-25',
 };
+
+test('landing routes are static and independent of MCP access, quota and rendering', async () => {
+  const mf = new Miniflare(
+    options(
+      {},
+      {},
+      {
+        type: 'ESModule',
+        path: 'static-site-test.js',
+        contents: `import worker from './worker.js';
+        export { Renderer } from './worker.js';
+        export default { fetch(request) {
+          return worker.fetch(request, new Proxy({}, {
+            get() { throw new Error('static routes must not read MCP bindings'); }
+          }));
+        }};`,
+      },
+    ),
+  );
+  try {
+    for (const [path, contentType, filename] of [
+      ['/', 'text/html; charset=utf-8', 'index.html'],
+      ['/example.svg', 'image/svg+xml', 'example.svg'],
+      ['/copy.js', 'text/javascript; charset=utf-8', 'copy.js'],
+    ]) {
+      const response = await mf.dispatchFetch(`https://d2.horv.co${path}?source=test`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('Content-Type'), contentType);
+      assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
+      assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
+      assert.equal(await response.text(), readFileSync(`site/${filename}`, 'utf8'));
+      const head = await mf.dispatchFetch(`https://d2.horv.co${path}`, {
+        method: 'HEAD',
+      });
+      assert.equal(head.status, 200);
+      assert.equal(head.headers.get('Content-Type'), contentType);
+      assert.equal(await head.text(), '');
+      for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
+        const rejected = await mf.dispatchFetch(`https://d2.horv.co${path}`, {
+          method,
+        });
+        assert.equal(rejected.status, 405);
+        assert.equal(rejected.headers.get('Allow'), 'GET, HEAD');
+      }
+    }
+    for (const path of ['/missing', '/mcp/', '/mcp/anything', '/index.html', '/site/example.d2']) {
+      const response = await mf.dispatchFetch(`https://d2.horv.co${path}`);
+      assert.equal(response.status, 404);
+      assert.equal(await response.text(), 'Not found');
+    }
+  } finally {
+    await mf.dispose();
+  }
+});
 
 for (const publicMode of [false, true]) {
   test(`${publicMode ? 'public' : 'private'} Go MCP: discovery, layouts, formats, errors and bounds`, async () => {
@@ -125,6 +182,21 @@ for (const publicMode of [false, true]) {
       assert.equal(init.serverInfo.name, 'd2-mcp');
       const list = await rpc('tools/list', {}, '2026-07-28');
       assert.equal(list.tools.length, 3);
+      const example = await rpc('tools/call', {
+        name: 'render-d2',
+        arguments: {
+          code: readFileSync('site/example.d2', 'utf8').trimEnd(),
+          format: 'svg',
+        },
+      });
+      assert.equal(example.isError, undefined);
+      assert.equal(
+        example.content.find((c) => c.type === 'resource').resource.text,
+        readFileSync('site/example.svg', 'utf8'),
+      );
+      assert.equal(example.structuredContent.options.theme_id, 0);
+      assert.equal(example.structuredContent.options.padding, 100);
+      assert.equal(example.structuredContent.options.sketch, false);
       for (const [layout, format] of [
         ['dagre', 'svg'],
         ['elk', 'png'],
@@ -318,6 +390,9 @@ test('cancelled current-protocol requests produce no result and leave the bridge
       modules: [
         { type: 'ESModule', path: 'cancellation-test-worker.js' },
         { type: 'ESModule', path: 'worker.js' },
+        { type: 'Text', path: 'site/index.html' },
+        { type: 'Text', path: 'site/example.svg' },
+        { type: 'Text', path: 'site/copy.js' },
         { type: 'ESModule', path: 'build/wasm_exec.js' },
         { type: 'CompiledWasm', path: 'build/d2.wasm' },
       ],

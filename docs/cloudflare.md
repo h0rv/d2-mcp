@@ -2,8 +2,10 @@
 
 This optional deployment branch runs the same Go MCP server in Wasm inside a SQLite-backed Durable
 Object. The object supplies the rendering CPU budget; it stores no documents,
-artifacts or sessions. Only `/mcp` is exposed. Access is private by default; public,
-token-free access requires an explicit runtime setting.
+artifacts or sessions. `/` serves a small static landing page; `/mcp` serves the
+protocol. MCP access is private by default; public, token-free access requires an
+explicit runtime setting. The landing page describes the public `d2.horv.co`
+service; customize its endpoint and access copy for a private deployment.
 
 ## Build and run locally
 
@@ -107,3 +109,14 @@ Objects. This optional target needs JavaScript and Wrangler; the native core doe
 not. The short Bash build command only invokes Go and copies its matching Wasm
 runtime and license. No Python, document storage or provider-specific Go server
 is introduced.
+
+The landing page lives in `cloudflare/site/`. Its HTML, copy script and example
+SVG are bundled as text modules. GET/HEAD requests for these three static routes
+do not call the renderer or the MCP limiter; other methods return 405. Unknown
+routes remain 404. The SVG was rendered from `example.d2` with `format: "svg"`
+and no rendering overrides. Browser checks reuse the existing `apps/` test
+dependencies; the page itself has no framework, dependencies or external assets.
+Client tabs support keyboard selection and fall back to visible setup commands
+without JavaScript. The page links to releases without offering an installer
+until binaries for the updated server are published; see the 1.2.0 stdio
+limitation in [installation](installation.md#published-binary--no-source-or-compiler).

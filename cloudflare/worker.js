@@ -1,5 +1,14 @@
 import wasm from './build/d2.wasm';
 import './build/wasm_exec.js';
+import page from './site/index.html';
+import example from './site/example.svg';
+import copyScript from './site/copy.js';
+
+const staticFiles = new Map([
+  ['/', [page, 'text/html; charset=utf-8']],
+  ['/example.svg', [example, 'image/svg+xml']],
+  ['/copy.js', [copyScript, 'text/javascript; charset=utf-8']],
+]);
 
 let ready;
 
@@ -71,7 +80,26 @@ export class Renderer {
 
 export default {
   async fetch(request, env) {
-    if (new URL(request.url).pathname !== '/mcp') return new Response('Not found', { status: 404 });
+    const pathname = new URL(request.url).pathname;
+    const file = staticFiles.get(pathname);
+    if (file) {
+      if (!['GET', 'HEAD'].includes(request.method))
+        return new Response('Method not allowed', {
+          status: 405,
+          headers: { Allow: 'GET, HEAD' },
+        });
+
+      return new Response(request.method === 'HEAD' ? null : file[0], {
+        headers: {
+          'Content-Type': file[1],
+          'Cache-Control': 'public, max-age=300',
+          'X-Content-Type-Options': 'nosniff',
+          'X-Frame-Options': 'DENY',
+          'Referrer-Policy': 'no-referrer',
+        },
+      });
+    }
+    if (pathname !== '/mcp') return new Response('Not found', { status: 404 });
 
     const publicMode = env.D2_MCP_PUBLIC === 'true';
     if (

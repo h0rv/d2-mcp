@@ -11,6 +11,13 @@
     }
   ],
   "preview_urls": false,
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/site/*.html", "**/site/*.svg", "**/site/copy.js"],
+      "fallthrough": true
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
