@@ -110,17 +110,24 @@ not. The short Bash build command only invokes Go and copies its matching Wasm
 runtime and license. No Python, document storage or provider-specific Go server
 is introduced.
 
-The landing page lives in `cloudflare/site/`. Its HTML, copy script, D2 source,
-SVG and ASCII are bundled as text modules; PNG is a data module. GET/HEAD requests for these static routes
-do not call the renderer or the MCP limiter; other methods return 405. Unknown
-routes remain 404. The SVG, PNG and ASCII examples are rendered from `example.d2`
-with `padding: 24` and otherwise default options. From `cloudflare/`, run
-`npm run build && node render-example.mjs` to regenerate the artifacts. Keep the
-page's source and ASCII text in sync; browser tests compare both to the files,
-and Worker tests compare all three artifacts with fresh MCP renders.
-Browser checks reuse the existing `apps/` test
-dependencies; the page itself has no framework, dependencies or external assets.
-Client tabs support keyboard selection and fall back to visible setup commands
-without JavaScript. The page links to releases without offering an installer
-until binaries for the updated server are published; see the 1.2.0 stdio
-limitation in [installation](installation.md#published-binary--no-source-or-compiler).
+The landing page lives in `cloudflare/site/`. Only its HTML and copy script are
+bundled as text modules. GET/HEAD requests for `/` and `/copy.js` do not call the
+renderer or the MCP limiter; other methods return 405. Unknown routes, including
+the removed `/example.*` showcase routes, return 404. No deployment bindings or
+MCP behavior change with this page.
+
+The page leads with remote client setup and a copyable agent prompt. Client tabs
+support keyboard selection and fall back to visible instructions without
+JavaScript. Copy controls select the text if clipboard access is unavailable.
+Browser checks reuse the existing `apps/` test dependencies; the page itself has
+no framework, dependencies or external assets. Client documentation links are
+listed in [agent installation](agent-installation.md#remote-http).
+
+The former diagram assets remain in `cloudflare/testdata/` as integration
+fixtures, outside the Worker bundle. Worker tests still compare SVG, PNG and
+ASCII bytes with fresh MCP renders, using `padding: 24` and otherwise default
+options. From `cloudflare/`, run `npm run build && node render-fixtures.mjs` to
+regenerate them. Removing the showcase does not remove ASCII rendering coverage.
+
+See the [ASCII diagnosis](ascii-rendering.md) for the former showcase’s spacing
+problem and the separately reproduced upstream Dagre arrowhead defect.

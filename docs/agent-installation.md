@@ -64,18 +64,41 @@ For VS Code, put it under `servers` in `.vscode/mcp.json` instead of
 ## Remote HTTP
 
 The public endpoint is `https://d2.horv.co/mcp`; it needs no Authorization header.
-Set `D2_MCP_URL`, then choose your client:
+No D2 binary, repository plugin, or marketplace installation is needed for these
+remote connections. Choose the command for your installed client:
 
 ```sh
-export D2_MCP_URL=https://d2.horv.co/mcp
-claude mcp add --scope user --transport http d2 "$D2_MCP_URL"
-codex mcp add d2 --url "$D2_MCP_URL"
-pi mcp add d2 --exposure direct --url "$D2_MCP_URL"
+claude mcp add --scope user --transport http d2 https://d2.horv.co/mcp
+codex mcp add d2 --url https://d2.horv.co/mcp
+pi mcp add d2 --exposure direct --url https://d2.horv.co/mcp
 ```
 
-In PowerShell set `$env:D2_MCP_URL = 'https://d2.horv.co/mcp'` and use
-`$env:D2_MCP_URL` in the client command. Send complete `code`; the hosted service
-has no file access. For your own deployment, substitute its HTTPS endpoint and
+Start a new Claude Code or Codex session and check `/mcp`. In current pi, start a
+session or use `/reload`, then `/mcp`. These literal commands also work in
+PowerShell; no shell-specific environment variable setup is required.
+
+For ChatGPT web, if your account/workspace allows custom MCP servers, open
+Plugins → + → Add custom MCP server. Name it `d2`, enter
+`https://d2.horv.co/mcp` under Connection, and use no authentication. Review the
+warning and discovered tools, create and install the resulting plugin, then
+select `@d2` in a new chat. This is a direct custom connection, not a published
+D2 marketplace listing. Current ChatGPT instructions do not require enabling
+Developer Mode. Availability and creation permissions vary by account and
+workspace; use the official help below if the option is missing.
+
+Setup references verified on 2026-10-16:
+
+- [Claude Code HTTP MCP and scope](https://code.claude.com/docs/en/mcp).
+- [Codex MCP](https://developers.openai.com/codex/mcp/); `codex mcp add --help`
+  also confirms the `--url` option.
+- [pi MCP](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md)
+  and [CLI options](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md#mcp-commands).
+- [ChatGPT connection steps and availability](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt)
+  and [connection testing](https://developers.openai.com/plugins/deploy/connect-chatgpt).
+
+Send complete `code`; the hosted service has no file access. Your agent can read
+an available project or your chat notes and send the resulting diagram source.
+For your own deployment, substitute its HTTPS endpoint and
 configure any authentication using the client's OAuth/header settings, never
 credentials in the URL.
 

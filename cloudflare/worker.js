@@ -1,18 +1,10 @@
 import wasm from './build/d2.wasm';
 import './build/wasm_exec.js';
 import page from './site/index.html';
-import example from './site/example.svg';
-import examplePNG from './site/example.png';
-import exampleText from './site/example.txt';
-import exampleSource from './site/example.d2';
 import copyScript from './site/copy.js';
 
 const staticFiles = new Map([
   ['/', [page, 'text/html; charset=utf-8']],
-  ['/example.svg', [example, 'image/svg+xml']],
-  ['/example.png', [examplePNG, 'image/png']],
-  ['/example.txt', [exampleText, 'text/plain; charset=utf-8']],
-  ['/example.d2', [exampleSource, 'text/plain; charset=utf-8']],
   ['/copy.js', [copyScript, 'text/javascript; charset=utf-8']],
 ]);
 

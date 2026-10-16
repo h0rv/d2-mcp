@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
-    <meta name="description" content="Create diagrams with your agent using D2. Connect over MCP.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+    <meta name="description" content="Connect your agent to D2 MCP, then turn your project or notes into a diagram.">
     <title>d2-mcp — diagrams for your agent</title>
     <link rel="icon" href="data:,">
     <style>
@@ -20,38 +20,29 @@
       p { margin: 12px 0; }
       a { color: inherit; text-underline-offset: 4px; }
       a:hover { text-decoration-thickness: 2px; }
-      nav { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 20px; }
       section { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--rule); }
       .quiet { color: var(--quiet); font-size: 12px; }
       .command { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; margin: 0 0 8px; padding: 12px; background: var(--well); border: 1px solid var(--rule); }
-      pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; }
-      code, textarea { font-family: inherit; }
-      pre, code, textarea { -webkit-user-select: text; user-select: text; cursor: text; }
-      .example { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
-      .example h3 { margin: 0 0 12px; }
-      .source { display: block; width: 100%; resize: vertical; min-height: 184px; padding: 12px; border: 1px solid var(--rule); border-radius: 0; background: var(--well); color: var(--ink); font-size: 12px; line-height: 1.8; }
-      .source-actions { display: flex; align-items: center; gap: 16px; margin-top: 8px; font-size: 12px; }
-      .output [role="tablist"] { margin-bottom: 0; }
-      .output figure { margin: 0; }
-      .ascii { min-height: 360px; padding: 16px; border: 1px solid var(--rule); overflow: auto; white-space: pre; line-height: 1.3; }
-      .output a[download] { display: inline-block; margin-top: 8px; font-size: 12px; }
-      details { margin-top: 16px; font-size: 12px; }
-      summary { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-      details ul { padding-left: 20px; }
+      pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 12px; line-height: 1.8; }
+      code { font-family: inherit; }
+      pre, code { -webkit-user-select: text; user-select: text; cursor: text; }
+      .prompt { padding: 12px; background: var(--well); border: 1px solid var(--rule); }
+      .prompt pre { font-family: inherit; font-size: 13px; }
+      .prompt button { display: block; margin: 8px 0 0 auto; }
+      .steps { padding-left: 22px; font-size: 12px; }
+      .steps li + li { margin-top: 8px; }
       .copy-status { min-height: 1.7em; color: var(--quiet); font-size: 12px; }
-      button { font: inherit; font-size: 12px; color: var(--quiet); background: transparent; border: 0; padding: 2px 4px; min-height: 26px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+      button { font: inherit; font-size: 12px; color: var(--quiet); background: transparent; border: 0; padding: 2px 4px; min-height: 32px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
       button:hover { color: var(--ink); }
       [hidden] { display: none !important; }
       [role="tablist"] { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--rule); }
-      [role="tab"] { min-height: 40px; padding: 8px; text-decoration: none; border-bottom: 2px solid transparent; }
+      [role="tab"] { min-height: 44px; padding: 8px; text-decoration: none; border-bottom: 2px solid transparent; }
       [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: currentColor; }
       :focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
-      figure { margin: 12px 0 0; }
-      .diagram { display: block; width: 100%; height: 360px; object-fit: contain; border: 1px solid var(--rule); background: white; }
       footer { border-top: 1px solid var(--rule); padding-block: 16px 32px; color: var(--quiet); font-size: 12px; }
       .skip { position: absolute; top: -100px; left: 20px; padding: 8px; background: var(--paper); }
       .skip:focus { top: 4px; }
-      @media (max-width: 480px) { main { padding-top: 32px; } h1 { font-size: 36px; } .example { grid-template-columns: minmax(0, 1fr); } .diagram { height: 360px; } }
+      @media (max-width: 480px) { main { padding-top: 32px; } h1 { font-size: 36px; } .command { grid-template-columns: minmax(0, 1fr); } .command button { justify-self: end; } button { min-height: 44px; } }
       @media (prefers-color-scheme: dark) { :root { --paper: #191919; --ink: #eee; --quiet: #aaa; --rule: #444; --well: #242424; } }
     </style>
     <script src="/copy.js" defer></script>
@@ -60,133 +51,76 @@
     <a class="skip" href="#main">Skip to content</a>
     <main id="main">
       <h1>d2-mcp</h1>
-      <p>Create diagrams with your agent using <a href="https://d2lang.com/">D2</a>.
-        Validate source and render SVG, PNG, or ASCII.</p>
-      <nav aria-label="Get started">
-        <a href="#connect">Connect</a>
-        <a href="#local">Downloads</a>
-        <a href="https://github.com/h0rv/d2-mcp">GitHub ↗</a>
-      </nav>
-
-      <section aria-labelledby="example-title">
-        <h2 id="example-title">A browser request</h2>
-        <div class="example">
-          <div>
-            <h3><label for="example-source">D2 source</label></h3>
-            <textarea id="example-source" class="source" readonly spellcheck="false" rows="8" aria-describedby="source-hint">client: Browser
-api: API
-db: Database {
-  shape: cylinder
-}
-client -&gt; api: HTTPS
-api -&gt; db: Query</textarea>
-            <div class="source-actions">
-              <button type="button" hidden data-copy="example-source" aria-label="Copy D2 source">Copy D2</button>
-              <a href="/example.d2" download="request-flow.d2">Download source</a>
-            </div>
-            <p id="source-hint" class="quiet">Select the text or copy it into your agent.</p>
-            <details>
-              <summary>Tools and options</summary>
-              <ul>
-                <li><code>compile-d2</code>: validate source and report errors.</li>
-                <li><code>render-d2</code>: SVG, PNG, or ASCII; choose layout, theme, sketch, padding, and scale.</li>
-                <li><code>fetch_d2_cheat_sheet</code>: D2 syntax reference.</li>
-              </ul>
-            </details>
-          </div>
-          <div class="output" data-tabs>
-            <div role="tablist" aria-label="Output format" hidden>
-              <button type="button" role="tab" id="output-svg-tab" aria-controls="output-svg-panel" aria-selected="false" tabindex="-1">SVG</button>
-              <button type="button" role="tab" id="output-png-tab" aria-controls="output-png-panel" aria-selected="false" tabindex="-1">PNG</button>
-              <button type="button" role="tab" id="output-ascii-tab" aria-controls="output-ascii-panel" aria-selected="false" tabindex="-1">ASCII</button>
-            </div>
-            <div id="output-svg-panel" data-panel tabindex="0">
-              <h3 data-tab-fallback>SVG</h3>
-              <figure><img class="diagram" src="/example.svg" alt="Browser sends an HTTPS request to the API, which queries the database." width="160" height="542"></figure>
-              <a href="/example.svg" download="request-flow.svg">Download SVG</a>
-            </div>
-            <div id="output-png-panel" data-panel tabindex="0">
-              <h3 data-tab-fallback>PNG</h3>
-              <figure><img class="diagram" src="/example.png" alt="The same browser, API, and database flow rendered as PNG." width="160" height="542"></figure>
-              <a href="/example.png" download="request-flow.png">Download PNG</a>
-            </div>
-            <div id="output-ascii-panel" data-panel tabindex="0">
-              <h3 data-tab-fallback>ASCII</h3>
-              <pre id="example-ascii" class="ascii" tabindex="0" aria-label="ASCII diagram">┌──────────┐
-│ Browser  │
-│          │
-└──────────┘
-      │&#32;&#32;&#32;&#32;&#32;
-    HTTPS&#32;&#32;&#32;
-      │&#32;&#32;&#32;&#32;&#32;
-  ┌──────┐&#32;&#32;
-  │ API  │&#32;&#32;
-  │      │&#32;&#32;
-  └──────┘&#32;&#32;
-      │&#32;&#32;&#32;&#32;&#32;
-    Query&#32;&#32;&#32;
-      │&#32;&#32;&#32;&#32;&#32;
- .-‾‾‾‾-.&#32;&#32;&#32;
-│╲-____-╱│&#32;&#32;
-│        │&#32;&#32;
-│Database│&#32;&#32;
-│        │&#32;&#32;
- ╲-____-╱&#32;&#32;&#32;
-</pre>
-              <div class="source-actions">
-                <button type="button" hidden data-copy="example-ascii" aria-label="Copy ASCII diagram">Copy ASCII</button>
-                <a href="/example.txt" download="request-flow.txt">Download ASCII</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <p>Give your agent a diagram tool. Connect once, then turn your project or notes into a diagram with <a href="https://d2lang.com/">D2</a>.</p>
 
       <section id="connect" aria-labelledby="connect-title">
-        <h2 id="connect-title">Connect your agent</h2>
-        <p class="quiet">No server install or token needed.</p>
+        <h2 id="connect-title">1. Connect your agent</h2>
+        <p class="quiet">Use the hosted server. No D2 installation or API key needed.</p>
         <div data-tabs>
           <div role="tablist" aria-label="MCP client" hidden>
             <button type="button" role="tab" id="agent-claude-tab" aria-controls="agent-claude-panel" aria-selected="false" tabindex="-1">Claude Code</button>
+            <button type="button" role="tab" id="agent-chatgpt-tab" aria-controls="agent-chatgpt-panel" aria-selected="false" tabindex="-1">ChatGPT</button>
             <button type="button" role="tab" id="agent-codex-tab" aria-controls="agent-codex-panel" aria-selected="false" tabindex="-1">Codex</button>
             <button type="button" role="tab" id="agent-pi-tab" aria-controls="agent-pi-panel" aria-selected="false" tabindex="-1">pi</button>
           </div>
           <div id="agent-claude-panel" data-panel>
             <h3 data-tab-fallback>Claude Code</h3>
+            <p class="quiet">Run in your terminal:</p>
             <div class="command">
               <pre><code id="claude-command" tabindex="0">claude mcp add --scope user --transport http d2 https://d2.horv.co/mcp</code></pre>
-              <button hidden data-copy="claude-command" aria-label="Copy command for Claude Code">Copy command</button>
+              <button type="button" hidden data-copy="claude-command" aria-label="Copy command for Claude Code">Copy command</button>
             </div>
+            <p class="quiet">Open Claude Code and check <code>/mcp</code>. <a href="https://code.claude.com/docs/en/mcp#option-1-add-a-remote-http-server">Setup help</a></p>
+          </div>
+          <div id="agent-chatgpt-panel" data-panel>
+            <h3 data-tab-fallback>ChatGPT</h3>
+            <ol class="steps">
+              <li>On ChatGPT web, open <a href="https://chatgpt.com/plugins">Plugins</a> → + → Add custom MCP server.</li>
+              <li>Name it <code>d2</code>. Paste the MCP URL below under Connection; this server needs no authentication.</li>
+              <li>Review the warning, create and install the plugin, then choose <code>@d2</code> in a new chat.</li>
+            </ol>
+            <p class="quiet">Requires an account or workspace that allows custom MCP servers. <a href="https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt">Availability and setup help</a></p>
           </div>
           <div id="agent-codex-panel" data-panel>
             <h3 data-tab-fallback>Codex</h3>
+            <p class="quiet">Run in your terminal:</p>
             <div class="command">
               <pre><code id="codex-command" tabindex="0">codex mcp add d2 --url https://d2.horv.co/mcp</code></pre>
-              <button hidden data-copy="codex-command" aria-label="Copy command for Codex">Copy command</button>
+              <button type="button" hidden data-copy="codex-command" aria-label="Copy command for Codex">Copy command</button>
             </div>
+            <p class="quiet">Start a new Codex session and check <code>/mcp</code>. <a href="https://developers.openai.com/codex/mcp/">Setup help</a></p>
           </div>
           <div id="agent-pi-panel" data-panel>
             <h3 data-tab-fallback>pi</h3>
+            <p class="quiet">With a current pi version that supports MCP, run:</p>
             <div class="command">
               <pre><code id="pi-command" tabindex="0">pi mcp add d2 --exposure direct --url https://d2.horv.co/mcp</code></pre>
-              <button hidden data-copy="pi-command" aria-label="Copy command for pi">Copy command</button>
+              <button type="button" hidden data-copy="pi-command" aria-label="Copy command for pi">Copy command</button>
             </div>
+            <p class="quiet">Start pi, or use <code>/reload</code>, then check <code>/mcp</code>. <a href="https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md">Setup help</a></p>
           </div>
         </div>
-        <p class="quiet">MCP URL: <code id="remote-url" tabindex="0">https://d2.horv.co/mcp</code> <button type="button" hidden data-copy="remote-url" aria-label="Copy URL for MCP">Copy URL</button> · <a href="https://github.com/h0rv/d2-mcp/blob/main/docs/agent-installation.md">Other clients</a></p>
-        <p class="quiet">The server does not save your diagram source or rendered output.</p>
+        <p class="quiet" id="url-label">MCP URL</p>
+        <div class="command">
+          <pre><code id="remote-url" tabindex="0" aria-labelledby="url-label">https://d2.horv.co/mcp</code></pre>
+          <button type="button" hidden data-copy="remote-url" aria-label="Copy URL for MCP">Copy URL</button>
+        </div>
       </section>
 
-      <section id="local" aria-labelledby="local-title">
-        <h2 id="local-title">Local downloads</h2>
-        <p class="quiet">Binaries for the updated server aren’t published yet. Use the remote connection above.
-          <a href="https://github.com/h0rv/d2-mcp/releases">Releases</a>.</p>
+      <section id="try" aria-labelledby="prompt-title">
+        <h2 id="prompt-title">2. Map a project you’re working on</h2>
+        <p class="quiet">Open your project in your agent, or paste a description into chat. Then try:</p>
+        <div class="prompt">
+          <pre id="agent-prompt" tabindex="0" aria-label="Agent prompt">Turn the project or notes in this conversation into a clear system diagram. Use the d2 MCP tools to map the main components and label how data moves between them. Ask about missing details instead of inventing them. Validate the D2, render a PNG, and return the image plus the D2 source. Then point out one bottleneck or single point of failure.</pre>
+          <button type="button" hidden data-copy="agent-prompt" aria-label="Copy prompt">Copy prompt</button>
+        </div>
+        <p class="quiet">Your agent sends diagram source to the hosted renderer. The server does not save your source or output.</p>
       </section>
       <p class="copy-status" role="status" aria-live="polite"></p>
-      <noscript><p class="quiet">JavaScript is off. Select the source or commands to copy them.</p></noscript>
+      <noscript><p class="quiet">JavaScript is off. Select the commands, URL, or prompt to copy them.</p></noscript>
     </main>
     <footer>
-      <a href="https://d2lang.com/">D2</a> by <a href="https://terrastruct.com/">Terrastruct</a> ·
+      <a href="https://github.com/h0rv/d2-mcp/blob/main/docs/agent-installation.md">Other setup options</a> ·
       <a href="https://github.com/h0rv/d2-mcp">Source</a> ·
       <a href="https://github.com/h0rv/d2-mcp/issues">Issues</a>
     </footer>
