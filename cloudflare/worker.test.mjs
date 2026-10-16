@@ -56,10 +56,6 @@ const options = (bindings = {}, limits = ratelimits, entry) =>
       ...(entry ? [entry] : []),
       { type: 'ESModule', path: 'worker.js' },
       { type: 'Text', path: 'site/index.html' },
-      { type: 'Text', path: 'site/example.svg' },
-      { type: 'Data', path: 'site/example.png' },
-      { type: 'Text', path: 'site/example.txt' },
-      { type: 'Text', path: 'site/example.d2' },
       { type: 'Text', path: 'site/copy.js' },
       { type: 'ESModule', path: 'build/wasm_exec.js' },
       { type: 'CompiledWasm', path: 'build/d2.wasm' },
@@ -99,10 +95,6 @@ test('landing routes are static and independent of MCP access, quota and renderi
   try {
     for (const [path, contentType, filename] of [
       ['/', 'text/html; charset=utf-8', 'index.html'],
-      ['/example.svg', 'image/svg+xml', 'example.svg'],
-      ['/example.png', 'image/png', 'example.png'],
-      ['/example.txt', 'text/plain; charset=utf-8', 'example.txt'],
-      ['/example.d2', 'text/plain; charset=utf-8', 'example.d2'],
       ['/copy.js', 'text/javascript; charset=utf-8', 'copy.js'],
     ]) {
       const response = await mf.dispatchFetch(`https://d2.horv.co${path}?source=test`);
@@ -125,7 +117,7 @@ test('landing routes are static and independent of MCP access, quota and renderi
         assert.equal(rejected.headers.get('Allow'), 'GET, HEAD');
       }
     }
-    for (const path of ['/missing', '/mcp/', '/mcp/anything', '/index.html', '/site/example.d2']) {
+    for (const path of ['/missing', '/mcp/', '/mcp/anything', '/index.html', '/site/example.d2', '/example.d2', '/example.svg', '/example.png', '/example.txt']) {
       const response = await mf.dispatchFetch(`https://d2.horv.co${path}`);
       assert.equal(response.status, 404);
       assert.equal(await response.text(), 'Not found');
@@ -188,7 +180,7 @@ for (const publicMode of [false, true]) {
       assert.equal(init.serverInfo.name, 'd2-mcp');
       const list = await rpc('tools/list', {}, '2026-07-28');
       assert.equal(list.tools.length, 3);
-      const source = readFileSync('site/example.d2', 'utf8').trimEnd();
+      const source = readFileSync('testdata/example.d2', 'utf8').trimEnd();
       const validation = await rpc('tools/call', { name: 'compile-d2', arguments: { code: source } });
       assert.equal(validation.isError, undefined);
       for (const format of ['svg', 'png', 'ascii']) {
@@ -201,7 +193,7 @@ for (const publicMode of [false, true]) {
           : Buffer.from(format === 'svg'
             ? example.content.find((c) => c.type === 'resource').resource.text
             : example.content.find((c) => c.type === 'text').text);
-        assert.deepEqual(data, readFileSync(`site/example.${format === 'ascii' ? 'txt' : format}`));
+        assert.deepEqual(data, readFileSync(`testdata/example.${format === 'ascii' ? 'txt' : format}`));
         assert.equal(example.structuredContent.options.theme_id, 0);
         assert.equal(example.structuredContent.options.padding, 24);
         assert.equal(example.structuredContent.options.sketch, false);
@@ -400,10 +392,6 @@ test('cancelled current-protocol requests produce no result and leave the bridge
         { type: 'ESModule', path: 'cancellation-test-worker.js' },
         { type: 'ESModule', path: 'worker.js' },
         { type: 'Text', path: 'site/index.html' },
-        { type: 'Text', path: 'site/example.svg' },
-        { type: 'Data', path: 'site/example.png' },
-        { type: 'Text', path: 'site/example.txt' },
-        { type: 'Text', path: 'site/example.d2' },
         { type: 'Text', path: 'site/copy.js' },
         { type: 'ESModule', path: 'build/wasm_exec.js' },
         { type: 'CompiledWasm', path: 'build/d2.wasm' },

@@ -1,12 +1,12 @@
-// Run after npm run build. Only the real MCP artifacts are written here;
-// keep the page's source textarea and ASCII preview in sync (browser tests check both).
+// Run after npm run build. Preserve real MCP artifacts as integration fixtures.
+// These files are not bundled into or served by the Worker.
 import { readFile, writeFile } from 'node:fs/promises';
 import './build/wasm_exec.js';
 
 const go = new Go();
 const { instance } = await WebAssembly.instantiate(await readFile('build/d2.wasm'), go.importObject);
 void go.run(instance);
-const code = (await readFile('site/example.d2', 'utf8')).trimEnd();
+const code = (await readFile('testdata/example.d2', 'utf8')).trimEnd();
 for (const format of ['svg', 'png', 'ascii']) {
   const response = JSON.parse(await d2MCP(JSON.stringify({
     method: 'POST', url: 'https://example.test/mcp',
@@ -25,5 +25,5 @@ for (const format of ['svg', 'png', 'ascii']) {
     : format === 'svg'
       ? result.content.find((item) => item.type === 'resource').resource.text
       : result.content.find((item) => item.type === 'text').text;
-  await writeFile(`site/example.${format === 'ascii' ? 'txt' : format}`, data);
+  await writeFile(`testdata/example.${format === 'ascii' ? 'txt' : format}`, data);
 }
