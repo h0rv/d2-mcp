@@ -110,11 +110,15 @@ not. The short Bash build command only invokes Go and copies its matching Wasm
 runtime and license. No Python, document storage or provider-specific Go server
 is introduced.
 
-The landing page lives in `cloudflare/site/`. Its HTML, copy script and example
-SVG are bundled as text modules. GET/HEAD requests for these three static routes
+The landing page lives in `cloudflare/site/`. Its HTML, copy script, D2 source,
+SVG and ASCII are bundled as text modules; PNG is a data module. GET/HEAD requests for these static routes
 do not call the renderer or the MCP limiter; other methods return 405. Unknown
-routes remain 404. The SVG was rendered from `example.d2` with `format: "svg"`
-and no rendering overrides. Browser checks reuse the existing `apps/` test
+routes remain 404. The SVG, PNG and ASCII examples are rendered from `example.d2`
+with `padding: 24` and otherwise default options. From `cloudflare/`, run
+`npm run build && node render-example.mjs` to regenerate the artifacts. Keep the
+page's source and ASCII text in sync; browser tests compare both to the files,
+and Worker tests compare all three artifacts with fresh MCP renders.
+Browser checks reuse the existing `apps/` test
 dependencies; the page itself has no framework, dependencies or external assets.
 Client tabs support keyboard selection and fall back to visible setup commands
 without JavaScript. The page links to releases without offering an installer

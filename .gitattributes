@@ -1,0 +1,2 @@
+# Preserve the renderer's exact ASCII artifact, including right-side padding.
+cloudflare/site/example.txt whitespace=-blank-at-eol
