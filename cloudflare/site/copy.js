@@ -37,25 +37,32 @@ for (const button of document.querySelectorAll('button[data-copy]')) {
   const source = document.getElementById(button.dataset.copy);
   if (!source) continue;
   button.hidden = false;
+  const label = button.textContent;
   let reset;
   button.addEventListener('click', async () => {
     clearTimeout(reset);
-    button.textContent = 'Copy';
+    button.textContent = label;
     try {
-      await navigator.clipboard.writeText(source.textContent);
+      const text = source instanceof HTMLTextAreaElement ? source.value : source.textContent;
+      await navigator.clipboard.writeText(text);
       button.textContent = 'Copied';
       status.textContent = `${button.getAttribute('aria-label').replace(/^Copy /, '')} copied.`;
       reset = setTimeout(() => {
-        button.textContent = 'Copy';
+        button.textContent = label;
       }, 2000);
     } catch {
-      source.focus();
-      const range = document.createRange();
-      range.selectNodeContents(source);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      status.textContent = 'Clipboard unavailable. Press Ctrl+C or ⌘C to copy the selected text.';
+      source.focus({ preventScroll: true });
+      if (source instanceof HTMLTextAreaElement) {
+        source.select();
+      } else {
+        const range = document.createRange();
+        range.selectNodeContents(source);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      button.textContent = 'Text selected';
+      status.textContent = 'Clipboard unavailable. Text selected; use your device’s Copy command or Ctrl+C / ⌘C.';
     }
   });
 }

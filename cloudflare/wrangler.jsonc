@@ -14,7 +14,12 @@
   "rules": [
     {
       "type": "Text",
-      "globs": ["**/site/*.html", "**/site/*.svg", "**/site/copy.js"],
+      "globs": ["**/site/*.html", "**/site/*.svg", "**/site/*.txt", "**/site/*.d2", "**/site/copy.js"],
+      "fallthrough": true
+    },
+    {
+      "type": "Data",
+      "globs": ["**/site/*.png"],
       "fallthrough": true
     }
   ],

@@ -1,2 +1,7 @@
-direction: right
-idea -> diagram
+client: Browser
+api: API
+db: Database {
+  shape: cylinder
+}
+client -> api: HTTPS
+api -> db: Query

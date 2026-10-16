@@ -57,6 +57,9 @@ const options = (bindings = {}, limits = ratelimits, entry) =>
       { type: 'ESModule', path: 'worker.js' },
       { type: 'Text', path: 'site/index.html' },
       { type: 'Text', path: 'site/example.svg' },
+      { type: 'Data', path: 'site/example.png' },
+      { type: 'Text', path: 'site/example.txt' },
+      { type: 'Text', path: 'site/example.d2' },
       { type: 'Text', path: 'site/copy.js' },
       { type: 'ESModule', path: 'build/wasm_exec.js' },
       { type: 'CompiledWasm', path: 'build/d2.wasm' },
@@ -97,6 +100,9 @@ test('landing routes are static and independent of MCP access, quota and renderi
     for (const [path, contentType, filename] of [
       ['/', 'text/html; charset=utf-8', 'index.html'],
       ['/example.svg', 'image/svg+xml', 'example.svg'],
+      ['/example.png', 'image/png', 'example.png'],
+      ['/example.txt', 'text/plain; charset=utf-8', 'example.txt'],
+      ['/example.d2', 'text/plain; charset=utf-8', 'example.d2'],
       ['/copy.js', 'text/javascript; charset=utf-8', 'copy.js'],
     ]) {
       const response = await mf.dispatchFetch(`https://d2.horv.co${path}?source=test`);
@@ -104,7 +110,7 @@ test('landing routes are static and independent of MCP access, quota and renderi
       assert.equal(response.headers.get('Content-Type'), contentType);
       assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
       assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
-      assert.equal(await response.text(), readFileSync(`site/${filename}`, 'utf8'));
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), readFileSync(`site/${filename}`));
       const head = await mf.dispatchFetch(`https://d2.horv.co${path}`, {
         method: 'HEAD',
       });
@@ -182,21 +188,24 @@ for (const publicMode of [false, true]) {
       assert.equal(init.serverInfo.name, 'd2-mcp');
       const list = await rpc('tools/list', {}, '2026-07-28');
       assert.equal(list.tools.length, 3);
-      const example = await rpc('tools/call', {
-        name: 'render-d2',
-        arguments: {
-          code: readFileSync('site/example.d2', 'utf8').trimEnd(),
-          format: 'svg',
-        },
-      });
-      assert.equal(example.isError, undefined);
-      assert.equal(
-        example.content.find((c) => c.type === 'resource').resource.text,
-        readFileSync('site/example.svg', 'utf8'),
-      );
-      assert.equal(example.structuredContent.options.theme_id, 0);
-      assert.equal(example.structuredContent.options.padding, 100);
-      assert.equal(example.structuredContent.options.sketch, false);
+      const source = readFileSync('site/example.d2', 'utf8').trimEnd();
+      const validation = await rpc('tools/call', { name: 'compile-d2', arguments: { code: source } });
+      assert.equal(validation.isError, undefined);
+      for (const format of ['svg', 'png', 'ascii']) {
+        const example = await rpc('tools/call', {
+          name: 'render-d2', arguments: { code: source, format, padding: 24 },
+        });
+        assert.equal(example.isError, undefined);
+        const data = format === 'png'
+          ? Buffer.from(example.content.find((c) => c.type === 'image').data, 'base64')
+          : Buffer.from(format === 'svg'
+            ? example.content.find((c) => c.type === 'resource').resource.text
+            : example.content.find((c) => c.type === 'text').text);
+        assert.deepEqual(data, readFileSync(`site/example.${format === 'ascii' ? 'txt' : format}`));
+        assert.equal(example.structuredContent.options.theme_id, 0);
+        assert.equal(example.structuredContent.options.padding, 24);
+        assert.equal(example.structuredContent.options.sketch, false);
+      }
       for (const [layout, format] of [
         ['dagre', 'svg'],
         ['elk', 'png'],
@@ -392,6 +401,9 @@ test('cancelled current-protocol requests produce no result and leave the bridge
         { type: 'ESModule', path: 'worker.js' },
         { type: 'Text', path: 'site/index.html' },
         { type: 'Text', path: 'site/example.svg' },
+        { type: 'Data', path: 'site/example.png' },
+        { type: 'Text', path: 'site/example.txt' },
+        { type: 'Text', path: 'site/example.d2' },
         { type: 'Text', path: 'site/copy.js' },
         { type: 'ESModule', path: 'build/wasm_exec.js' },
         { type: 'CompiledWasm', path: 'build/d2.wasm' },

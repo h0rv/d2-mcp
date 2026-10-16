@@ -25,7 +25,20 @@
       .quiet { color: var(--quiet); font-size: 12px; }
       .command { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; margin: 0 0 8px; padding: 12px; background: var(--well); border: 1px solid var(--rule); }
       pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.8; }
-      code { font-family: inherit; }
+      code, textarea { font-family: inherit; }
+      pre, code, textarea { -webkit-user-select: text; user-select: text; cursor: text; }
+      .example { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+      .example h3 { margin: 0 0 12px; }
+      .source { display: block; width: 100%; resize: vertical; min-height: 184px; padding: 12px; border: 1px solid var(--rule); border-radius: 0; background: var(--well); color: var(--ink); font-size: 12px; line-height: 1.8; }
+      .source-actions { display: flex; align-items: center; gap: 16px; margin-top: 8px; font-size: 12px; }
+      .output [role="tablist"] { margin-bottom: 0; }
+      .output figure { margin: 0; }
+      .ascii { min-height: 360px; padding: 16px; border: 1px solid var(--rule); overflow: auto; white-space: pre; line-height: 1.3; }
+      .output a[download] { display: inline-block; margin-top: 8px; font-size: 12px; }
+      details { margin-top: 16px; font-size: 12px; }
+      summary { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+      details ul { padding-left: 20px; }
+      .copy-status { min-height: 1.7em; color: var(--quiet); font-size: 12px; }
       button { font: inherit; font-size: 12px; color: var(--quiet); background: transparent; border: 0; padding: 2px 4px; min-height: 26px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
       button:hover { color: var(--ink); }
       [hidden] { display: none !important; }
@@ -34,12 +47,11 @@
       [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: currentColor; }
       :focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
       figure { margin: 12px 0 0; }
-      .diagram { display: block; width: 100%; height: 200px; object-fit: contain; border: 1px solid var(--rule); background: white; }
+      .diagram { display: block; width: 100%; height: 360px; object-fit: contain; border: 1px solid var(--rule); background: white; }
       footer { border-top: 1px solid var(--rule); padding-block: 16px 32px; color: var(--quiet); font-size: 12px; }
       .skip { position: absolute; top: -100px; left: 20px; padding: 8px; background: var(--paper); }
       .skip:focus { top: 4px; }
-      [role="status"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-      @media (max-width: 480px) { main { padding-top: 32px; } h1 { font-size: 36px; } .diagram { height: 180px; } }
+      @media (max-width: 480px) { main { padding-top: 32px; } h1 { font-size: 36px; } .example { grid-template-columns: minmax(0, 1fr); } .diagram { height: 360px; } }
       @media (prefers-color-scheme: dark) { :root { --paper: #191919; --ink: #eee; --quiet: #aaa; --rule: #444; --well: #242424; } }
     </style>
     <script src="/copy.js" defer></script>
@@ -48,22 +60,86 @@
     <a class="skip" href="#main">Skip to content</a>
     <main id="main">
       <h1>d2-mcp</h1>
-      <p>Create diagrams with your agent using <a href="https://d2lang.com/">D2</a>.</p>
+      <p>Create diagrams with your agent using <a href="https://d2lang.com/">D2</a>.
+        Validate source and render SVG, PNG, or ASCII.</p>
       <nav aria-label="Get started">
         <a href="#connect">Connect</a>
         <a href="#local">Downloads</a>
         <a href="https://github.com/h0rv/d2-mcp">GitHub ↗</a>
       </nav>
 
-      <section aria-label="Diagram example">
-        <div class="command">
-          <pre><code id="example-source" tabindex="0">direction: right
-idea -&gt; diagram</code></pre>
-          <button hidden data-copy="example-source" aria-label="Copy D2 example">Copy</button>
+      <section aria-labelledby="example-title">
+        <h2 id="example-title">A browser request</h2>
+        <div class="example">
+          <div>
+            <h3><label for="example-source">D2 source</label></h3>
+            <textarea id="example-source" class="source" readonly spellcheck="false" rows="8" aria-describedby="source-hint">client: Browser
+api: API
+db: Database {
+  shape: cylinder
+}
+client -&gt; api: HTTPS
+api -&gt; db: Query</textarea>
+            <div class="source-actions">
+              <button type="button" hidden data-copy="example-source" aria-label="Copy D2 source">Copy D2</button>
+              <a href="/example.d2" download="request-flow.d2">Download source</a>
+            </div>
+            <p id="source-hint" class="quiet">Select the text or copy it into your agent.</p>
+            <details>
+              <summary>Tools and options</summary>
+              <ul>
+                <li><code>compile-d2</code>: validate source and report errors.</li>
+                <li><code>render-d2</code>: SVG, PNG, or ASCII; choose layout, theme, sketch, padding, and scale.</li>
+                <li><code>fetch_d2_cheat_sheet</code>: D2 syntax reference.</li>
+              </ul>
+            </details>
+          </div>
+          <div class="output" data-tabs>
+            <div role="tablist" aria-label="Output format" hidden>
+              <button type="button" role="tab" id="output-svg-tab" aria-controls="output-svg-panel" aria-selected="false" tabindex="-1">SVG</button>
+              <button type="button" role="tab" id="output-png-tab" aria-controls="output-png-panel" aria-selected="false" tabindex="-1">PNG</button>
+              <button type="button" role="tab" id="output-ascii-tab" aria-controls="output-ascii-panel" aria-selected="false" tabindex="-1">ASCII</button>
+            </div>
+            <div id="output-svg-panel" data-panel tabindex="0">
+              <h3 data-tab-fallback>SVG</h3>
+              <figure><img class="diagram" src="/example.svg" alt="Browser sends an HTTPS request to the API, which queries the database." width="160" height="542"></figure>
+              <a href="/example.svg" download="request-flow.svg">Download SVG</a>
+            </div>
+            <div id="output-png-panel" data-panel tabindex="0">
+              <h3 data-tab-fallback>PNG</h3>
+              <figure><img class="diagram" src="/example.png" alt="The same browser, API, and database flow rendered as PNG." width="160" height="542"></figure>
+              <a href="/example.png" download="request-flow.png">Download PNG</a>
+            </div>
+            <div id="output-ascii-panel" data-panel tabindex="0">
+              <h3 data-tab-fallback>ASCII</h3>
+              <pre id="example-ascii" class="ascii" tabindex="0" aria-label="ASCII diagram">┌──────────┐
+│ Browser  │
+│          │
+└──────────┘
+      │&#32;&#32;&#32;&#32;&#32;
+    HTTPS&#32;&#32;&#32;
+      │&#32;&#32;&#32;&#32;&#32;
+  ┌──────┐&#32;&#32;
+  │ API  │&#32;&#32;
+  │      │&#32;&#32;
+  └──────┘&#32;&#32;
+      │&#32;&#32;&#32;&#32;&#32;
+    Query&#32;&#32;&#32;
+      │&#32;&#32;&#32;&#32;&#32;
+ .-‾‾‾‾-.&#32;&#32;&#32;
+│╲-____-╱│&#32;&#32;
+│        │&#32;&#32;
+│Database│&#32;&#32;
+│        │&#32;&#32;
+ ╲-____-╱&#32;&#32;&#32;
+</pre>
+              <div class="source-actions">
+                <button type="button" hidden data-copy="example-ascii" aria-label="Copy ASCII diagram">Copy ASCII</button>
+                <a href="/example.txt" download="request-flow.txt">Download ASCII</a>
+              </div>
+            </div>
+          </div>
         </div>
-        <figure>
-          <img class="diagram" src="/example.svg" alt="A box labeled idea connects to a box labeled diagram." width="640" height="200">
-        </figure>
       </section>
 
       <section id="connect" aria-labelledby="connect-title">
@@ -79,25 +155,25 @@ idea -&gt; diagram</code></pre>
             <h3 data-tab-fallback>Claude Code</h3>
             <div class="command">
               <pre><code id="claude-command" tabindex="0">claude mcp add --scope user --transport http d2 https://d2.horv.co/mcp</code></pre>
-              <button hidden data-copy="claude-command" aria-label="Copy Claude Code setup">Copy</button>
+              <button hidden data-copy="claude-command" aria-label="Copy command for Claude Code">Copy command</button>
             </div>
           </div>
           <div id="agent-codex-panel" data-panel>
             <h3 data-tab-fallback>Codex</h3>
             <div class="command">
               <pre><code id="codex-command" tabindex="0">codex mcp add d2 --url https://d2.horv.co/mcp</code></pre>
-              <button hidden data-copy="codex-command" aria-label="Copy Codex setup">Copy</button>
+              <button hidden data-copy="codex-command" aria-label="Copy command for Codex">Copy command</button>
             </div>
           </div>
           <div id="agent-pi-panel" data-panel>
             <h3 data-tab-fallback>pi</h3>
             <div class="command">
               <pre><code id="pi-command" tabindex="0">pi mcp add d2 --exposure direct --url https://d2.horv.co/mcp</code></pre>
-              <button hidden data-copy="pi-command" aria-label="Copy pi setup">Copy</button>
+              <button hidden data-copy="pi-command" aria-label="Copy command for pi">Copy command</button>
             </div>
           </div>
         </div>
-        <p class="quiet">MCP URL: <code id="remote-url">https://d2.horv.co/mcp</code> · <a href="https://github.com/h0rv/d2-mcp/blob/main/docs/agent-installation.md">Other clients</a></p>
+        <p class="quiet">MCP URL: <code id="remote-url" tabindex="0">https://d2.horv.co/mcp</code> <button type="button" hidden data-copy="remote-url" aria-label="Copy URL for MCP">Copy URL</button> · <a href="https://github.com/h0rv/d2-mcp/blob/main/docs/agent-installation.md">Other clients</a></p>
         <p class="quiet">The server does not save your diagram source or rendered output.</p>
       </section>
 
@@ -106,12 +182,14 @@ idea -&gt; diagram</code></pre>
         <p class="quiet">Binaries for the updated server aren’t published yet. Use the remote connection above.
           <a href="https://github.com/h0rv/d2-mcp/releases">Releases</a>.</p>
       </section>
+      <p class="copy-status" role="status" aria-live="polite"></p>
+      <noscript><p class="quiet">JavaScript is off. Select the source or commands to copy them.</p></noscript>
     </main>
     <footer>
       <a href="https://d2lang.com/">D2</a> by <a href="https://terrastruct.com/">Terrastruct</a> ·
       <a href="https://github.com/h0rv/d2-mcp">Source</a> ·
       <a href="https://github.com/h0rv/d2-mcp/issues">Issues</a>
     </footer>
-    <p role="status" aria-live="polite"></p>
+
   </body>
 </html>
