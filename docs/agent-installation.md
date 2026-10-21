@@ -4,6 +4,8 @@ For hosted use, skip installation and use [Remote HTTP](#remote-http) below.
 For local use, [install the binary](installation.md) first and replace `d2-mcp`
 with its absolute path if your client does not inherit your shell's PATH.
 Choose one connection method to avoid registering the server twice.
+The optional packages below are pinned to the `2.0.0` release tag; they do not
+install or upgrade the server binary.
 
 ## Claude Code
 
@@ -14,7 +16,7 @@ claude mcp add --scope user --transport stdio d2 -- d2-mcp --transport stdio
 For the optional skill and prompts, use the plugin instead:
 
 ```sh
-claude plugin marketplace add 'h0rv/d2-mcp#codex/d2-stateless-refresh'
+claude plugin marketplace add 'h0rv/d2-mcp#2.0.0'
 claude plugin install d2@d2-mcp
 ```
 
@@ -29,7 +31,7 @@ codex mcp add d2 -- d2-mcp --transport stdio
 With a CLI supporting `codex plugin`, the optional skill installs with:
 
 ```sh
-codex plugin marketplace add h0rv/d2-mcp --ref codex/d2-stateless-refresh
+codex plugin marketplace add h0rv/d2-mcp --ref 2.0.0
 codex plugin add d2@d2-mcp
 ```
 
@@ -43,7 +45,7 @@ Pi 0.99+ has native MCP support. Install the optional skill/prompts and register
 the server separately:
 
 ```sh
-pi install git:github.com/h0rv/d2-mcp@codex/d2-stateless-refresh
+pi install git:github.com/h0rv/d2-mcp@2.0.0
 pi mcp add d2 --exposure direct -- d2-mcp --transport stdio
 pi mcp list --json
 ```

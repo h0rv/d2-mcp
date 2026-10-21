@@ -2,11 +2,11 @@
 
 A small Go MCP server for validating and rendering [D2](https://d2lang.com/) diagrams. Send complete source and rendering options; receive PNG, SVG, or text. The default server keeps no documents, artifacts, or HTTP sessions. It needs no D2 executable, browser, or PNG converter.
 
-This branch uses **D2 0.9.0**, **Go 1.27.2**, and the official **Go MCP SDK 1.8.0**. D2's Dagre, ELK, and open-source TALA layouts are bundled. See [inputs and limits](docs/compatibility.md).
+**d2-mcp 2.0.0** uses **D2 0.9.0**, **Go 1.27.2**, and the official **Go MCP SDK 1.8.0**. D2's Dagre, ELK, and open-source TALA layouts are bundled. See [inputs and limits](docs/compatibility.md).
 
 ## Install
 
-Follow [install commands](docs/installation.md), then [connect Claude, Codex, Pi, or VS Code](docs/agent-installation.md). The refreshed renderer is not released yet; the guide distinguishes building this branch from installing the older published binary.
+Install a [2.0.0 binary or build from source](docs/installation.md), then [connect Claude, Codex, Pi, or VS Code](docs/agent-installation.md). See [what shipped in 2.0.0](docs/releases/2.0.0.md) and the [1.2.0 migration notes](docs/compatibility.md#upgrading-from-120-to-200).
 
 For hosted use without installing a binary, connect to `https://d2.horv.co/mcp`
 using the [remote HTTP client commands](docs/agent-installation.md#remote-http).
@@ -66,7 +66,7 @@ behavior are unchanged; no Node runtime, website, or download store is needed.
 Connect to `/mcp` using the client's custom MCP configuration. A remote host
 needs your operator-provided HTTPS endpoint, not a marketplace listing.
 Client availability and download support vary; see the guide's evidence and
-limitations. This feature is unreleased and is not in the published 1.2.0 binary.
+limitations. The viewer is included in the 2.0.0 binaries.
 
 ## Tools
 
@@ -208,5 +208,6 @@ D2_MCP_TEST_BINARY="$PWD/d2-mcp" go test -run TestDistribution -v .
 ```
 
 CI runs Go race/vet tests, native Linux/macOS/Windows artifact and MCP checks,
-five target builds, checksum verification and the non-root container. Optional
-browser UI and provider deployment adapters are developed in separate PRs.
+five target builds, checksum verification and the non-root container. The optional
+[browser UI](docs/mcp-apps.md) and [Cloudflare target](docs/cloudflare.md) have
+separate build and test guides.
