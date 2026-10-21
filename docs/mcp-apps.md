@@ -1,14 +1,14 @@
 # Optional MCP Apps viewer
 
+The viewer is included in [d2-mcp 2.0.0](installation.md). Enable it explicitly:
+
 ```sh
-go build -o d2-mcp .
-./d2-mcp --transport http --port 8080 --ui
+d2-mcp --transport http --port 8080 --ui
 ```
 
 Connect an MCP Apps client to `http://127.0.0.1:8080/mcp`. Stdio also supports
 `--ui`. The flag defaults off; ordinary tool results work without a viewer.
-Release 1.2.0 does not include this feature. No Node runtime is needed to run the
-Go binary: it embeds the built HTML.
+No Node runtime is needed to run the Go binary: it embeds the built HTML.
 
 For VS Code, merge into `.vscode/mcp.json`:
 
@@ -17,8 +17,8 @@ For VS Code, merge into `.vscode/mcp.json`:
 ```
 
 For remote clients, use your deployed HTTPS endpoint and its authentication.
-A remote client cannot reach your laptop's loopback address. The separate
-Cloudflare deployment branch serves ordinary tools with the viewer disabled.
+A remote client cannot reach your laptop's loopback address. The optional
+[Cloudflare target](cloudflare.md) serves ordinary tools with the viewer disabled.
 
 | Client | Documented inline UI support (checked 2026-10-12) |
 | --- | --- |

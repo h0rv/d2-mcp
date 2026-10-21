@@ -1,7 +1,8 @@
 # Run on Cloudflare
 
-This optional deployment branch runs the same Go MCP server in Wasm inside a SQLite-backed Durable
-Object. The object supplies the rendering CPU budget; it stores no documents,
+This optional deployment target, included in 2.0.0, runs the same Go MCP server
+in Wasm inside a SQLite-backed Durable Object. The object supplies the rendering
+CPU budget; it stores no documents,
 artifacts or sessions. `/` serves a small static landing page; `/mcp` serves the
 protocol. MCP access is private by default; public, token-free access requires an
 explicit runtime setting. The landing page describes the public `d2.horv.co`
